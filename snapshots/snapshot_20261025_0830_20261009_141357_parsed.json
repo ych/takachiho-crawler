@@ -1,0 +1,366 @@
+{
+  "forms_count": 6,
+  "forms": [
+    {
+      "id": "ajaxForm",
+      "name": "ajaxForm",
+      "action": "/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a914a3-4d0c-4b20-88e0-9dd8c0a8018d&service_start_datetime=2026%2F10%2F25+08%3A30%3A00&service_end_datetime=2026%2F10%2F25+09%3A00%3A00",
+      "method": "POST",
+      "inputs": [
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "_method",
+          "value": "POST",
+          "id": null,
+          "class": null,
+          "placeholder": null
+        }
+      ]
+    },
+    {
+      "id": "mainForm",
+      "name": "mainForm",
+      "action": "/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a914a3-4d0c-4b20-88e0-9dd8c0a8018d&service_start_datetime=2026%2F10%2F25+08%3A30%3A00&service_end_datetime=2026%2F10%2F25+09%3A00%3A00",
+      "method": "POST",
+      "inputs": [
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "_method",
+          "value": "PUT",
+          "id": null,
+          "class": null,
+          "placeholder": null
+        },
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "action_token",
+          "value": "6ac88625-78f0-4fda-98f2-7651c0a8018d",
+          "id": "actionTokenId",
+          "class": null,
+          "placeholder": null
+        },
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "root_action",
+          "value": "view",
+          "id": "rootActionId",
+          "class": null,
+          "placeholder": null
+        },
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "data[Event][id]",
+          "value": "6892dd9d-d5ac-43d4-a213-4aa6c0a8018d",
+          "id": "mainFormSearchTargetId",
+          "class": "bg-green",
+          "placeholder": null
+        },
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "data[Event][cd]",
+          "value": "EV00000007",
+          "id": "mainFormSearchTargetCd",
+          "class": "bd-purple",
+          "placeholder": null
+        }
+      ]
+    },
+    {
+      "id": "spareForm",
+      "name": "spareForm",
+      "action": "/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a914a3-4d0c-4b20-88e0-9dd8c0a8018d&service_start_datetime=2026%2F10%2F25+08%3A30%3A00&service_end_datetime=2026%2F10%2F25+09%3A00%3A00",
+      "method": "POST",
+      "inputs": [
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "_method",
+          "value": "PUT",
+          "id": null,
+          "class": null,
+          "placeholder": null
+        }
+      ]
+    },
+    {
+      "id": "noSubmitForm",
+      "name": null,
+      "action": "/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a914a3-4d0c-4b20-88e0-9dd8c0a8018d&service_start_datetime=2026%2F10%2F25+08%3A30%3A00&service_end_datetime=2026%2F10%2F25+09%3A00%3A00",
+      "method": "POST",
+      "inputs": [
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "_method",
+          "value": "POST",
+          "id": null,
+          "class": null,
+          "placeholder": null
+        },
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "data[__ctrl]",
+          "value": "Events",
+          "id": "pageCtrl",
+          "class": null,
+          "placeholder": null
+        },
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "data[__action]",
+          "value": "view",
+          "id": "pageAction",
+          "class": null,
+          "placeholder": null
+        },
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "data[__paramCd]",
+          "value": "EV00000007",
+          "id": "pageParamCd",
+          "class": null,
+          "placeholder": null
+        },
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "data[__main_form_use_flg]",
+          "value": "1",
+          "id": "mainFormUseFlg",
+          "class": null,
+          "placeholder": null
+        },
+        {
+          "tag": "input",
+          "type": "hidden",
+          "name": "data[__main_form_activate_flg]",
+          "value": "0",
+          "id": "mainFormActivateFlg",
+          "class": null,
+          "placeholder": null
+        }
+      ]
+    },
+    {
+      "id": "no_login_order_form",
+      "name": null,
+      "action": null,
+      "method": "GET",
+      "inputs": [
+        {
+          "tag": "input",
+          "type": "text",
+          "name": "data[CustomerAuth][login_id]",
+          "value": null,
+          "id": "login_order_login_id",
+          "class": null,
+          "placeholder": null
+        },
+        {
+          "tag": "input",
+          "type": "password",
+          "name": "data[CustomerAuth][login_password]",
+          "value": null,
+          "id": "login_order_login_pw",
+          "class": null,
+          "placeholder": null
+        }
+      ]
+    },
+    {
+      "id": "favorite_service_login_dialog_form",
+      "name": null,
+      "action": null,
+      "method": "GET",
+      "inputs": [
+        {
+          "tag": "input",
+          "type": "text",
+          "name": "data[CustomerAuth][login_id]",
+          "value": null,
+          "id": "favorite_service_login_id",
+          "class": null,
+          "placeholder": null
+        },
+        {
+          "tag": "input",
+          "type": "password",
+          "name": "data[CustomerAuth][login_password]",
+          "value": null,
+          "id": "favorite_service_login_pw",
+          "class": null,
+          "placeholder": null
+        }
+      ]
+    }
+  ],
+  "meaningful_inputs": [
+    {
+      "tag": "input",
+      "type": "text",
+      "name": "data[CustomerAuth][login_id]",
+      "value": null,
+      "id": "login_order_login_id",
+      "class": null,
+      "placeholder": null
+    },
+    {
+      "tag": "input",
+      "type": "password",
+      "name": "data[CustomerAuth][login_password]",
+      "value": null,
+      "id": "login_order_login_pw",
+      "class": null,
+      "placeholder": null
+    },
+    {
+      "tag": "input",
+      "type": "text",
+      "name": "data[CustomerAuth][login_id]",
+      "value": null,
+      "id": "favorite_service_login_id",
+      "class": null,
+      "placeholder": null
+    },
+    {
+      "tag": "input",
+      "type": "password",
+      "name": "data[CustomerAuth][login_password]",
+      "value": null,
+      "id": "favorite_service_login_pw",
+      "class": null,
+      "placeholder": null
+    },
+    {
+      "tag": "input",
+      "type": "hidden",
+      "name": "data[service_cd]",
+      "value": "",
+      "id": null,
+      "class": "api_service_cd",
+      "placeholder": null
+    },
+    {
+      "tag": "select",
+      "type": "select",
+      "name": "data[fullcalendar_control_date_list]",
+      "value": null,
+      "id": null,
+      "class": "fullcalendar_control_date_list force-activate-display",
+      "placeholder": null
+    },
+    {
+      "tag": "input",
+      "type": "hidden",
+      "name": "data[service_date]",
+      "value": "",
+      "id": null,
+      "class": "api_service_date",
+      "placeholder": null
+    },
+    {
+      "tag": "input",
+      "type": "hidden",
+      "name": "data[service_cd]",
+      "value": "",
+      "id": null,
+      "class": "api_service_cd",
+      "placeholder": null
+    },
+    {
+      "tag": "input",
+      "type": "hidden",
+      "name": "data[service_cd]",
+      "value": "",
+      "id": null,
+      "class": "api_service_cd",
+      "placeholder": null
+    },
+    {
+      "tag": "input",
+      "type": "hidden",
+      "name": "data[service_session_cd]",
+      "value": "",
+      "id": null,
+      "class": "api_service_session_cd",
+      "placeholder": null
+    },
+    {
+      "tag": "input",
+      "type": "hidden",
+      "name": "data[service_start_datetime]",
+      "value": "",
+      "id": null,
+      "class": "api_service_start_datetime",
+      "placeholder": null
+    },
+    {
+      "tag": "input",
+      "type": "hidden",
+      "name": "data[service_end_datetime]",
+      "value": "",
+      "id": null,
+      "class": "api_service_end_datetime",
+      "placeholder": null
+    }
+  ],
+  "all_inputs_count": 27,
+  "buttons_count": 10,
+  "links_count": 11,
+  "text_sample": [
+    "高千穂峡貸しボート予約サイト｜高千穂町観光協会",
+    "App.Const.USER_AGENT='PC';App.Const.BROWSER='Chrome';App.Const.CLIENT_NAME='takachiho1';App.Const.CLIENT_PRODUCT_TYPE='1';App.Const.MODULE_NAME='Front';App.Const.SITE_DOMAIN='https://eipro.jp/takachiho1/';App.Const.CTRL='Events';App.Const.ACTION='view';App.Const.PARAM_CD='EV00000007';App.Const.ApiKey = {};App.Const.ApiKey.GoogleMaps='AIzaSyAsNbQ2QGgcEWhP1WbrgqbfYhGloHLZJUo';",
+    "App.Module.Front.Const.CALENDAR_DISPLAY_TYPE='2';App.Module.Front.Const.CALENDAR_DISPLAY_TYPE_MONTH='1';App.Module.Front.Const.CALENDAR_DISPLAY_TYPE_WEEK='2';App.Module.Front.Const.CALENDAR_DISPLAY_TYPE_DAY='3';App.Module.Front.Const.CALENDAR_SEPARATE_TYPE='30';App.Module.Front.Const.CALENDAR_DISPLAY_AMOUNT='3';App.Module.Front.Const.CALENDAR_DATE_TYPE='1';App.Module.Front.Const.CALENDAR_DISPLAY_START_HOUR_TYPE='7';App.Module.Front.Const.CALENDAR_DISPLAY_END_HOUR_TYPE='18';App.Module.Front.Const.CALENDAR_SELECT_ACTION_NONE='0';App.Module.Front.Const.CALENDAR_SELECT_ACTION_POPUP='1';App.Module.Front.Const.CALENDAR_SELECT_ACTION_ORDER='2';App.Module.Front.Const.CALENDAR_SELECT_ACTION_DETAIL='3';App.Module.Front.Const.TRANSLATOR_DISPLAY_FLG='1';App.Module.Front.Const.PAYJP_TENANT_ID='ten_b2a99be6306e5e0b44f330f43de4';App.Module.Front.Const.OPTION_TEMPORARY_HOLD_RESERVATION_AVAILABLE='1';",
+    ":root{--config_color:#1831b8;}body{background:#FFFFFF;}a.front_btn.color_config{background:#1831b8;border:#1831b8 1px solid;}button.front_btn.color_config{background:#1831b8;border:#1831b8 1px solid;}a.front_btn.color_white_gray:hover{color:#1831b8;}button.front_btn.color_white_gray:hover{color:#1831b8;}a:hover {color:#1831b8;}i.fa{color:#1831b8;}a.logo span{color:#1831b8;}#sideMenuList>ul>li>a{border-left:#1831b8 3px solid;}#sideMenuList>ul>li>a:hover{border-left:#1831b8 3px solid;}input[type='radio']:checked+label:after,input[type='radio']:not(:checked)+label:after{background:#1831b8;}input[type='checkbox']:checked+label:after,input[type='checkbox']:not(:checked)+label:after{background:#1831b8;}h1.page_title{border-left:#1831b8 3px solid;}ul#iframe-dropdown-menu>li>a:hover{background-color:#1831b8;}ul#iframe-dropdown-menu>li>a:hover{background-color:#1831b8;}.fc-agenda-slots td div{height:30px;}.front_base_boder{border-color:#1831b8;}.front_base_background{background-color:#1831b8;}.calendar_color_accept_cyclic{background-color:#32CD32;color:#000000;}.calendar_color_accept_cyclic_override{background-color:#008000;color:#FFFFFF;}.calendar_color_accept_divided{background-color:#1E90FF;color:#FFFFFF;}.calendar_color_accept_divided_override{background-color:#0456A8;color:#FFFFFF;}.calendar_color_accept_once{background-color:#FEA500;color:#000000;}.calendar_color_stop{background-color:#FF0000;color:#FFFFFF;}.calendar_color_cancel{background-color:#808080;color:#000000;}.calendar_color_registed{background-color:#1E90FF;color:#FFFFFF;}.calendar_color_editing{background-color:#32CD32;color:#000000;}.calendar_color_orderable{background-color:#1E90FF;color:#FFFFFF;}.calendar_color_no_orderable{background-color:#C0C0C0;color:#000000;}.calendar_color_cancel_waitable{background-color:#1ec8ff;color:#000000;}",
+    "/* --------------------------------\r\n共通\r\n-------------------------------- */\r\ndiv.h2_wrapper {\r\n\tdisplay: table;\r\n\twidth: 100%;\r\n\tmin-height: 50px;\r\n\tpadding-left: 56px;\r\n\tpadding-bottom: 5px;\r\n\tborder-bottom: 3px solid #efefef;\r\n\tmargin-bottom: 15px;\r\n\tline-height: 28px;\r\n}\r\ndiv.h2_wrapper > p {\r\n\tdisplay: table-cell;\r\n\tfont-size: 26px;\r\n\tfont-weight: bold;\r\n\tvertical-align: bottom;\r\n\ttext-shadow: 1px 1px 2px rgba(0,0,0,0.25);\r\n}\r\ndiv.h3_wrapper {\r\n\tdisplay: table;\r\n\twidth: 100%;\r\n\tmin-height: 34px;\r\n\tpadding-left: 42px;\r\n\tpadding-bottom: 5px;\r\n\tborder-bottom: 2px solid #efefef;\r\n\tmargin: 15px 0 15px 32px;\r\n\tline-height: 23px;\r\n}\r\ndiv.h3_wrapper > p {\r\n\tdisplay: table-cell;\r\n\tfont-size: 21px;\r\n\tfont-weight: bold;\r\n\tvertical-align: bottom;\r\n\ttext-shadow: 1px 1px 2px rgba(0,0,0,0.25);\r\n}\r\ndiv#bottom_banner {\r\n\t width:100%;\r\n\t text-align: center;\r\n}\r\ndiv#bottom_banner img {\r\n\tbox-shadow: 0 0 15px 1px rgba(0,0,0,0.1);\r\n\tmargin: 10px;\r\n}\r\np.indent {\r\n\ttext-indent: 1rem;\r\n}\r\np.style1 {\r\n\tfont-size: 0.9rem;\r\n\tmargin-bottom: 1rem;\r\n}\r\np.style2 {\r\n\tfont-size: 1.2rem;\r\n\tfont-weight: bold;\r\n\tmargin-bottom: 1rem;\r\n\tpadding-left: 5px;\r\n\tborder-left: 5px solid darkgreen;\r\n}\r\np.style3 {\r\n\tfont-size: 1rem;\r\n\tfont-weight: bold;\r\n\tmargin-top: 1rem;\r\n\tmargin-bottom: 1rem;\r\n\tpadding-left: 5px;\r\n\tborder-left: 5px solid orange;\r\n\tborder-right: 5px solid orange;\r\n}\r\np.style4 {\r\n\tfont-size: 0.8rem;\r\n\tfont-weight: bold;\r\n\tmargin-bottom: 1rem;\r\n\tpadding-left: 5px;\r\n\tborder-left: 5px solid green;\r\n}\r\nhr.style1 {\r\n\tborder: 2px solid #efefef;\r\n\tmargin-bottom: 1rem;\r\n}\r\nh3.style1 {\r\n\tfont-size: 1.3rem;\r\n\ttext-shadow: 1px 1px 2px rgba(0,0,0,0.5);\r\n\tline-height: 1.5rem;\r\n\tpadding: 0 0 3px 3px;\r\n\tmargin-bottom: 1rem;\r\n\tborder-bottom: 5px solid #efefef;\r\n}\r\nh4.style1 {\r\n\tmargin-top: 1rem;\r\n\tmargin-bottom: 0.5rem;\r\n\tfont-size: 1.1rem;\r\n\ttext-shadow: 1px 1px 2px rgba(0,0,0,0.5);\r\n}\r\nul.style1,\r\nol.style1 {\r\n\tfont-size: 0.9rem;\r\n\tline-height: 1.5rem;\r\n\tmargin-top: 1rem;\r\n\tmargin-bottom: 1rem;\r\n\r\n  background: #efefef;\r\n  border-radius: 8px;\r\n  box-shadow: 0px 0px 5px rgba(0,0,0,0.2);\r\n  padding: 1em 1em 1em 2.5em;\r\n}\r\nul.style1 a,\r\nol.style1 a {\r\n\ttext-decoration: underline;\r\n}\r\nul.style1 > li,\r\nol.style1 > li ul li {\r\n\tposition: relative;\r\n\tpadding-left: 0.4em;\r\n}\r\nul.style1 > li:before {\r\n\tcolor: darkgreen;\r\n\tfont-family: FontAwesome;\r\n\tcontent: '\\f138';\r\n\tfont-size: 1.2em;\r\n\tposition: absolute;\r\n\tleft: -1em;\r\n\ttop: 0;\r\n}\r\nul.style1 > li ul,\r\nul.style1 > li ol,\r\nol.style1 > li ul,\r\nol.style1 > li ol {\r\n\tline-height: 1.2rem;\r\n}\r\nul.style1 > li ul li,\r\nul.style1 > li ol li,\r\nol.style1 > li ul li,\r\nol.style1 > li ol li {\r\n\tmargin-left: -1rem;\r\n} \r\nol.style1 > li ul {\r\n\tlist-style: none;\r\n}\r\nol.style1 > li ul li:before {\r\n\tcolor: darkgreen;\r\n\tfont-family: FontAwesome;\r\n\tcontent: '\\f0da';\r\n\tposition: absolute;\r\n\tleft: -1em;\r\n\ttop: 0;\r\n}\r\n.lm32 {\r\n\tmargin-left: 32px;\r\n}\r\n.hm32 {\r\n\tmargin-left: 32px;\r\n\tmargin-right: 32px;\r\n}\r\n.red {\r\n\tcolor: red;\r\n}\r\n.blue {\r\n\tcolor: blue;\r\n}\r\n.center {\r\n\ttext-align: center;\r\n}\r\n\r\n/* --------------------------------\r\nサイド\r\n-------------------------------- */\r\naside {\r\n\twidth: 100%;\r\n}\r\naside a {\r\n}\r\naside a img {\r\n\tvertical-align: bottom;\r\n}\r\n\r\n/* --------------------------------\r\nトップページ\r\n-------------------------------- */\r\np.yoyaku_button a {\r\n\tdisplay: block;\r\n\twidth: 90%;\r\n\tmargin: 2rem auto 0;\r\n\tborder-radius: 5px;\r\n\tbackground: rgba(0,0,255,0.5);\r\n\tcolor: #fff;\r\n\tpadding: 30px;\r\n\ttext-align: center;\r\n\tfont-size: 2rem;\r\n\tfont-weight: bold;\r\n\t-webkit-transition: all 0.3s ease;\r\n\t-moz-transition: all 0.3s ease;\r\n\ttransition: all 0.3s ease;\r\n}\r\np.yoyaku_button a:hover {\r\n\tbackground: rgba(0,0,255,0.8);\r\n}\r\n\r\n/* --------------------------------\r\n予約入力フォーム\r\n-------------------------------- */\r\nh3.style2 {\r\n\tborder-top: 1px solid red;\r\n\tborder-bottom: 1px solid red;\r\n\tborder-left: 20px solid red;\r\n\tborder-right: 1px solid red;\r\n\tborder-radius: 0 8px 8px 0;\r\n\tpadding: 1rem;\r\n\tfont-size: 1.4rem;\r\n\tcolor: red;\r\n\tmargin: 0 0 1rem 0;\r\n\ttext-shadow: 1px 1px 2px rgba(255,0,0,0.5);\r\n}\r\np.rentalboat2020_date {\r\n\ttext-align: right;\r\n\tmargin: 2rem 0;\r\n\tpadding: 0.5rem 1rem 0 0;\r\n\tborder-top: 5px solid #efefef;\r\n\tfont-size: 1rem;\r\n}\r\n\r\n/* --------------------------------\r\nポリシー\r\n-------------------------------- */\r\ntable.style1 {\r\n  font-size: 0.8rem;\r\n  border-collapse: separate;\r\n  border-spacing: 3px;\r\n  width: 80%;\r\n  margin: 0 auto 2rem;\r\n  box-sizing: border-box;\r\n  border-radius: 5px;\r\n}\r\ntable.style1 th,\r\ntable.style1 td {\r\n  border: 1px solid #efefef;\r\n  padding: 3px 5px;\r\n  border-radius: 3px;\r\n}\r\ntable.style1 th {\r\n  text-align: left;\r\n  background: #efefef;\r\n  vertical-align: top;\r\n  min-width: 110px;\r\n  max-width: 110px;\r\n}\r\ndiv#legal_signature {\r\n\twidth: 100%;\r\n\tfloat: none;\r\n}\r\ndiv#legal_signature p {\r\n\tdisplay: block;\r\n\tfloat: right;\r\n}",
+    "var languages = {'言語を選択':'Select Language'};\r\n\tlanguages['アイスランド語'] = 'Icelandic';languages['アイルランド語'] = 'Irish';languages['アゼルバイジャン語'] = 'Azerbaijani';languages['アフリカーンス語'] = 'Afrikaans';languages['アムハラ語'] = 'Amharic';languages['アラビア語'] = 'Arabic';languages['アルバニア語'] = 'Albanian';languages['アルメニア語'] = 'Armenian';languages['イタリア語'] = 'Italian';languages['イディッシュ語'] = 'Yiddish';languages['イボ語'] = 'Igbo';languages['インドネシア語'] = 'Indonesian';languages['ウェールズ語'] = 'Welsh';languages['ウクライナ語'] = 'Ukrainian';languages['ウズベク語'] = 'Uzbek';languages['ウルドゥ語'] = 'Urdu';languages['エストニア語'] = 'Estonian';languages['エスペラント語'] = 'Esperanto';languages['オランダ語'] = 'Dutch';languages['カザフ語'] = 'Kazakh';languages['カタルーニャ語'] = 'Catalan';languages['ガリシア語'] = 'Galician';languages['カンナダ語'] = 'Kannada';languages['ギリシャ語'] = 'Greek';languages['キルギス語'] = 'Kyrgyz';languages['グジャラト語'] = 'Gujarati';languages['クメール語'] = 'Khmer';languages['クルド語'] = 'Kurdish';languages['クロアチア語'] = 'Croatian';languages['コーサ語'] = 'Xhosa';languages['コルシカ語'] = 'Corsican';languages['サモア語'] = 'Samoan';languages['ジャワ語'] = 'Javanese';languages['ジョージア(グルジア)語'] = 'Georgian';languages['ショナ語'] = 'Shona';languages['シンド語'] = 'Sindhi';languages['シンハラ語'] = 'Sinhalese';languages['スウェーデン語'] = 'Swedish';languages['ズールー語'] = 'Zulu';languages['スコットランド ゲール語'] = 'Scottish Gaelic';languages['スペイン語'] = 'Spanish';languages['スロバキア語'] = 'Slovak';languages['スロベニア語'] = 'Slovenian';languages['スワヒリ語'] = 'Swahili';languages['スンダ語'] = 'Sundanese';languages['セブアノ語'] = 'Cebuano';languages['セルビア語'] = 'Serbian';languages['ソマリ語'] = 'Somali';languages['タイ語'] = 'Thai';languages['タガログ語'] = 'Tagalog';languages['タジク語'] = 'Tajik';languages['タミル語'] = 'Tamil';languages['チェコ語'] = 'Czech';languages['チェワ語'] = 'Chewa';languages['テルグ語'] = 'Telugu';languages['デンマーク語'] = 'Danish';languages['ドイツ語'] = 'German';languages['トルコ語'] = 'Turkish';languages['ネパール語'] = 'Nepali';languages['ノルウェー語'] = 'Norwegian';languages['ハイチ語'] = 'Haitian';languages['ハウサ語'] = 'Hausa';languages['パシュト語'] = 'Pashto';languages['バスク語'] = 'Basque';languages['ハワイ語'] = 'Hawaiian';languages['ハンガリー語'] = 'Hungarian';languages['パンジャブ語'] = 'Punjabi';languages['ミャンマー語'] = 'Burmese';languages['ヒンディー語'] = 'Hindi';languages['フィンランド語'] = 'Finnish';languages['フランス語'] = 'French';languages['フリジア語'] = 'Frisian';languages['ブルガリア語'] = 'Bulgarian';languages['ベトナム語'] = 'Vietnamese';languages['ヘブライ語'] = 'Hebrew';languages['ベラルーシ語'] = 'Belarusian';languages['ペルシャ語'] = 'Persian';languages['ベンガル語'] = 'Bengali';languages['ポーランド語'] = 'Polish';languages['ボスニア語'] = 'Bosnian';languages['ポルトガル語'] = 'Portuguese';languages['マオリ語'] = 'Maori';languages['マケドニア語'] = 'Macedonian';languages['マラーティー語'] = 'Marathi';languages['マラガシ語'] = 'Malagasy';languages['マラヤーラム語'] = 'Malayalam';languages['マルタ語'] = 'Maltese';languages['マレー語'] = 'Malay';languages['モン語'] = 'Mon';languages['モンゴル語'] = 'Mongolian';languages['ヨルバ語'] = 'Yoruba';languages['ラオ語'] = 'Lao';languages['ラテン語'] = 'Latin';languages['ラトビア語'] = 'Latvian';languages['リトアニア語'] = 'Lithuanian';languages['ルーマニア語'] = 'Romanian';languages['ルクセンブルク語'] = 'Luxembourgish';languages['ロシア語'] = 'Russian';languages['英語'] = 'English';languages['韓国語'] = 'Korean';languages['中国語(簡体)'] = 'Chinese (Simplified)';languages['中国語(繁体)'] = 'Chinese (Traditional)';languages['日本語'] = 'Japanese';\t// Google翻訳からの初期化コールバック\r\n\tvar googleTranslateElementInitialized = false;\r\n\tfunction googleTranslateElementInit() {\r\n\t\tgoogleTranslateElementInitialized = true;\r\n\t}\r\n\t$(function(){\r\n\t\t// ライブラリの読み込み判定関数\r\n\t\tvar check = (function(){\r\n\t\t\treturn googleTranslateElementInitialized;\r\n\t\t});\r\n\t\t// 初期化処理\r\n\t\tvar initialize = (function(){\r\n\r\n\t\t\t// テンプレートHTMLは翻訳対象外にする\r\n\t\t\t$(App.Base.Str.cls('template')).addClass('notranslate');\r\n\r\n\t\t\t// 月カレンダーの部品を翻訳対象外にする\r\n\t\t\t$('div.calendar-date-selector-parts').addClass('notranslate');\r\n\r\n\t\t\t// google翻訳を設定する\r\n\t\t\tnew google.translate.TranslateElement({\r\n\t\t\t\tpageLanguage: 'ja',\r\n\t\t\t \tincludedLanguages: \"ja,en,zh-CN,zh-TW,ko,th,vi,tl,ceb,be,bg,da,de,es,fi,fr,my,ne,it,id,sv,nl,pt\",\r\n\t\t\t \tlayout: google.translate.TranslateElement.InlineLayout.SIMPLE,\r\n\t\t\t}, 'google_translate_element');\r\n\r\n\t\t\t// 翻訳用iframeの設定\r\n\t\t\t$('iframe.goog-te-menu-frame').each(function(){\r\n\r\n\t\t\t\tvar iframe = this;\r\n\r\n\t\t\t\tvar translateLangMenuFlg = false;\r\n\t\t\t\t// 言語リスト英語化\r\n\t\t\t\tvar translateLangMenu = (function(){\r\n\t\t\t\t\tvar menuBody = $(App.Base.Str.id($.escape(':1.menuBody')), iframe.contentWindow.document);\r\n\t\t\t\t\tmenuBody.find('span.text').each(function(){\r\n\t\t\t\t\t\tvar lang_name = $(this).text();\r\n\t\t\t\t\t\tif (languages[lang_name]) {\r\n\t\t\t\t\t\t\tlang_name = languages[lang_name];\r\n\t\t\t\t\t\t\t$(this).text(lang_name);\r\n\t\t\t\t\t\t}\r\n\t\t\t\t\t});\r\n\t\t\t\t\ttranslateLangMenuFlg = false;\r\n\t\t\t\t});\r\n\r\n\t\t\t\ttranslateLangMenuFlg = true;\r\n\t\t\t\ttranslateLangMenu();\r\n\r\n\t\t\t\t// 言語リスト更新時\r\n\t\t\t\t$(iframe.contentWindow.document).on('DOMSubtreeModified', function(){\r\n\t\t\t\t\tif (!translateLangMenuFlg) {\r\n\t\t\t\t\t\ttranslateLangMenuFlg = true;\r\n\t\t\t\t\t\tsetTimeout(translateLangMenu, 1000);\r\n\t\t\t\t\t}\r\n\t\t\t\t});\r\n\t\t\t});\r\n\r\n\t\t\tvar translateSelectLangFlg = false;\r\n\t\t\t// 選択言語変更時\r\n\t\t\t$(App.Base.Str.id('google_translate_element')).on('DOMSubtreeModified', App.Base.Str.id($.escape(':0.targetLanguage')) + ' ' + App.Base.Str.cls('goog-te-menu-value') + ' span:first', function(){\r\n\r\n\t\t\t\tif (!translateSelectLangFlg) {\r\n\t\t\t\t\ttranslateSelectLangFlg = true;\r\n\t\t\t\t\tvar lang_name = $(this).text();\r\n\t\t\t\t\tif (languages[lang_name]) {\r\n\t\t\t\t\t\tlang_name = languages[lang_name];\r\n\t\t\t\t\t\t$(this).text(lang_name);\r\n\t\t\t\t\t}\r\n\t\t\t\t\ttranslateSelectLangFlg = false;\r\n\t\t\t\t}\r\n\t\t\t})\r\n\r\n\t\t});\r\n\r\n\t\t// ライブラリの読み込みが終わるまで処理を待機\r\n\t\tApp.initableInterval(check, initialize);\r\n\t});",
+    "トップページ",
+    "個人情報保護方針",
+    "特定商取引法",
+    "お問い合わせ",
+    "予約キャンセル",
+    "よくある質問Q＆A",
+    "高千穂峡貸しボート予約",
+    "予約前確認事項",
+    "＊",
+    "ID",
+    "＊",
+    "パスワード",
+    "ログイン",
+    "認証中",
+    "パスワードを忘れた方はこちら",
+    "会員登録して予約",
+    "会員登録して予約",
+    "会員登録せずに予約",
+    "＊",
+    "ID",
+    "＊",
+    "パスワード",
+    "ログイン",
+    "認証中",
+    "パスワードを忘れた方はこちら",
+    "div.service_mini_calendar div.fullcalendar_control_left,\r\ndiv.service_mini_calendar div.fullcalendar_control_right {\r\n\twidth: 50px;\r\n\tmmin-width: 50px;\r\n\tmax-width: 50px;\r\n}",
+    "今日",
+    "2020© 一般社団法人高千穂町観光協会",
+    "Top"
+  ],
+  "timestamp": "20261009_141357",
+  "session_tag": "20261025_0830",
+  "target_url": "https://eipro.jp/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a914a3-4d0c-4b20-88e0-9dd8c0a8018d&service_start_datetime=2026/10/25%2008:30:00&service_end_datetime=2026/10/25%2009:00:00",
+  "slot_status": {
+    "icon": "hourglass",
+    "status_desc": "⏳ 未開放 (預約準備中 / 沙漏)",
+    "is_open": false,
+    "has_order_button": false,
+    "html_snippet": "<div class='external-events complex_list_view_type_list_view_type_image w600'> \t<!-- [extra]complex_list_view_type_list_view_type_image[start] --> \t<span class='trans_target_child' /></span> \t<article class='line'> \t\t\t\t\t\t<div class=\"s-12 l-12 post-text\"> \t\t\t\t\t\t<div class=\"complex_list_view_type"
+  }
+}

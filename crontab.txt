@@ -1,0 +1,5 @@
+# 高千穂貸しボート 預約爬蟲 (明天 10/10 08:00 AM 監控 10/24 船班)
+0 8 10 10 * /bin/bash /Users/ych/takachiho_crawler/run_1024.sh >> /Users/ych/takachiho_crawler/cron_1024.log 2>&1
+
+# 高千穂貸しボート 預約爬蟲 (後天 10/11 08:00 AM 監控 10/25 船班)
+0 8 11 10 * /bin/bash /Users/ych/takachiho_crawler/run_1025.sh >> /Users/ych/takachiho_crawler/cron_1025.log 2>&1

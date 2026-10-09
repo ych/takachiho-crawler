@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary and log files
+temp/
+*.log
+
+# macOS
+.DS_Store
