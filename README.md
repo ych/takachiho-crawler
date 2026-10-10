@@ -42,17 +42,13 @@
 ```text
 /Users/ych/takachiho_crawler/
 ├── crawler.py                     # 主爬蟲與比對程式
+├── FORM_FIELDS.md                 # 完整預約表單欄位規格與範本 (NEW)
 ├── README.md                      # 使用說明文件
-├── crawl_history.log              # 執行歷程與紀錄日誌
-├── temp/
-│   └── latest_temp.html           # 每次抓取的最新暫存網頁
-├── snapshots/
-│   ├── latest.html                # 最近一次儲存的基準完整 HTML
-│   ├── latest_normalized.txt      # 最近一次的正規化文字基準
-│   ├── snapshot_YYYYMMDD_*.html   # 永久存檔的各版本網頁快照
-│   └── snapshot_YYYYMMDD_*_parsed.json # 結構化表單欄位摘要
-└── diffs/
-    └── diff_YYYYMMDD_*.patch      # 各版本實質差異比對報告
+├── crontab.txt                    # crontab 排程設定範例
+├── run_1024.sh / run_1025.sh      # 各時段定時監控啟動腳本
+├── temp/                          # 暫存比對目錄
+├── snapshots/                     # 永久存檔的快照與解析 JSON
+└── diffs/                         # 異動版本比對 patch 檔
 ```
 
 ---
