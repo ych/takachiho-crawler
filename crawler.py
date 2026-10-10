@@ -3,7 +3,7 @@
 """
 高千穂峡貸しボート 預約頁面爬蟲與異動監控工具
 用途: 監控指定預約/時段頁面，先暫存比對，內容若有實質變動則永久存檔並解析表單欄位。
-支援多時段/多網址獨立快照、定時排程、超時自動停止與 API 狀態檢測。
+支援多時段/多網址獨立快照、Session 預熱與自動 hold_slot 席位鎖定、定時排程、超時自動停止與 API 狀態檢測。
 """
 
 import sys
@@ -16,7 +16,8 @@ import difflib
 import argparse
 import urllib.request
 import urllib.parse
-from datetime import datetime
+import http.cookiejar
+from datetime import datetime, timedelta
 from pathlib import Path
 from html.parser import HTMLParser
 
@@ -24,9 +25,9 @@ DEFAULT_TARGET_URL = (
     "https://eipro.jp/takachiho1/events/view/EV00000007"
     "?closable=1"
     "&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d"
-    "&service_session_cd=68a915a5-d904-4502-8530-9dd8c0a8018d"
-    "&service_start_datetime=2026/10/24%2008:30:00"
-    "&service_end_datetime=2026/10/24%2009:00:00"
+    "&service_session_cd=68a914a3-4d0c-4b20-88e0-9dd8c0a8018d"
+    "&service_start_datetime=2026/10/25%2008:30:00"
+    "&service_end_datetime=2026/10/25%2009:00:00"
 )
 
 USER_AGENT = (
@@ -149,7 +150,7 @@ def parse_page_details(html: str) -> dict:
     }
 
 
-def fetch_url(url: str, timeout: int = 15) -> str:
+def fetch_url(url: str, opener=None, timeout: int = 15) -> str:
     """發送 HTTP GET 請求抓取指定網頁"""
     req = urllib.request.Request(
         url,
@@ -160,7 +161,8 @@ def fetch_url(url: str, timeout: int = 15) -> str:
             "Connection": "keep-alive",
         },
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    open_func = opener.open if opener else urllib.request.urlopen
+    with open_func(req, timeout=timeout) as resp:
         return resp.read().decode("utf-8", errors="ignore")
 
 
@@ -169,6 +171,7 @@ def check_slot_api(
     service_session_cd: str,
     service_start: str,
     service_end: str,
+    opener=None,
 ) -> dict:
     """
     查詢 eipro 內部的 service_unit API，直接確認該時段在日曆系統中的狀態
@@ -191,8 +194,9 @@ def check_slot_api(
         },
     )
 
+    open_func = opener.open if opener else urllib.request.urlopen
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with open_func(req, timeout=10) as resp:
             res_json = json.loads(resp.read().decode())
             html_data = res_json.get("data", "")
             icon = "unknown"
@@ -213,7 +217,7 @@ def check_slot_api(
 
             # 檢查是否有真正的可點擊預約按鈕 (排除一般說明文字與禁止點擊的按鈕)
             has_order_btn = bool(re.search(
-                r'<(?:button|a)[^>]*class=[\'"][^\'"]*(?:front_btn|order_btn)[^\'"]*[\'"][^>]*>(?:(?!click_prohibit|予約終了).)*?(?:予約|申込)',
+                r'<(?:button|a)[^>]*class=[\'"][^\'"]*(?:front_btn|order_btn|order_with_statement)[^\'"]*[\'"][^>]*>(?:(?!click_prohibit|予約終了).)*?(?:予約|申込)',
                 html_data,
                 re.DOTALL,
             ))
@@ -235,6 +239,12 @@ class TakachihoScraper:
     def __init__(self, target_url: str = DEFAULT_TARGET_URL, base_dir: Path = None):
         self.target_url = target_url
         self.base_dir = base_dir or Path(__file__).resolve().parent
+
+        # 初始化 CookieJar 與 Session Opener (確保 hold_slot 與 orders/add 共享會話)
+        self.cj = http.cookiejar.CookieJar()
+        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cj))
+        self.action_token = None
+        self.session_primed = False
 
         # 從目標網址解析出專屬時段標籤 (避免多時段互相覆蓋 baseline)
         self._parse_url_params()
@@ -259,11 +269,20 @@ class TakachihoScraper:
         q = urllib.parse.parse_qs(parsed.query)
 
         self.service_cd = q.get("service_cd", ["6892dd9d-5b54-4202-bd1d-4aa6c0a8018d"])[0]
-        self.service_session_cd = q.get("service_session_cd", ["68a915a5-d904-4502-8530-9dd8c0a8018d"])[0]
-        self.service_start = q.get("service_start_datetime", ["2026/10/24 08:30:00"])[0]
-        self.service_end = q.get("service_end_datetime", ["2026/10/24 09:00:00"])[0]
+        self.service_session_cd = q.get("service_session_cd", ["68a914a3-4d0c-4b20-88e0-9dd8c0a8018d"])[0]
+        self.service_start = q.get("service_start_datetime", ["2026/10/25 08:30:00"])[0]
+        self.service_end = q.get("service_end_datetime", ["2026/10/25 09:00:00"])[0]
 
-        # 產生簡短唯一的 session tag，例如 20261024_0830
+        # 計算目標日期與隔日日期 (用於 eventCalendars/search)
+        try:
+            start_dt_obj = datetime.strptime(self.service_start, "%Y/%m/%d %H:%M:%S")
+            self.target_date_from = start_dt_obj.strftime("%Y/%m/%d")
+            self.target_date_to = (start_dt_obj + timedelta(days=1)).strftime("%Y/%m/%d")
+        except Exception:
+            self.target_date_from = "2026/10/25"
+            self.target_date_to = "2026/10/26"
+
+        # 產生簡短唯一的 session tag，例如 20261025_0830
         cleaned_date = self.service_start.replace("/", "").replace(":", "").replace(" ", "_")
         self.session_tag = cleaned_date[:13] if len(cleaned_date) >= 13 else "default"
 
@@ -286,6 +305,85 @@ class TakachihoScraper:
         except Exception:
             pass
 
+    def prime_session(self) -> bool:
+        """
+        向 eipro 系統建立前置 Session，載入日曆首頁與搜尋狀態。
+        這一步至關重要：若未完成前置初始化，直接呼叫 hold_slot 會被伺服器視為無效請求。
+        """
+        self.log(f"🔑 正在預熱 Session (查詢範圍: {self.target_date_from} ~ {self.target_date_to})...")
+        try:
+            # 1. 訪問日曆首頁取得 Session Cookie 與 action_token
+            req = urllib.request.Request(
+                "https://eipro.jp/takachiho1/eventCalendars/index",
+                headers={"User-Agent": USER_AGENT},
+            )
+            with self.opener.open(req, timeout=10) as resp:
+                html = resp.read().decode("utf-8", errors="ignore")
+            m = re.search(r'action_token.*?value=[\'\"]([^\'\"]+)', html)
+            self.action_token = m.group(1) if m else ""
+
+            # 2. 呼叫日曆 search API，在 PHP Session 中寫入查詢時段快取
+            search_data = urllib.parse.urlencode({
+                "data[conds][ServiceView][max_session_dateOver]": self.target_date_from,
+                "data[conds][ServiceView][min_session_dateUnder]": self.target_date_to,
+                "action_token": self.action_token,
+                "root_action": "index",
+                "data[ServiceView][id]": "",
+                "data[ServiceView][cd]": "",
+                "calendar_view_name": "agendaWeek",
+                "calendar_type": "week",
+            }).encode()
+            req_search = urllib.request.Request(
+                "https://eipro.jp/takachiho1/eventCalendars/search",
+                data=search_data,
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                },
+            )
+            with self.opener.open(req_search, timeout=10) as resp:
+                search_res = json.loads(resp.read().decode("utf-8", errors="ignore"))
+            results_count = len(search_res.get("results", []))
+            self.session_primed = True
+            self.log(f"🔑 Session 預熱成功！已取得 Cookie 與 Token (日曆時段數: {results_count})")
+            return True
+        except Exception as e:
+            self.log(f"[WARN] Session 預熱失敗: {e}")
+            return False
+
+    def try_hold_slot(self) -> dict:
+        """
+        發送 hold_slot 嘗試鎖定席位 (仮押さえ)。
+        成功時伺服器會回傳 {"data": {"result": "1"}} 並在 Session 中打上暫時鎖位標記。
+        """
+        if not self.session_primed:
+            self.prime_session()
+
+        url = "https://eipro.jp/takachiho1/apiServices/api/hold_slot"
+        data = urllib.parse.urlencode({
+            "data[service_cd]": self.service_cd,
+            "data[service_session_cd]": self.service_session_cd,
+            "data[service_start_datetime]": self.service_start,
+            "data[service_end_datetime]": self.service_end,
+        }).encode()
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "User-Agent": USER_AGENT,
+                "X-Requested-With": "XMLHttpRequest",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "Referer": "https://eipro.jp/takachiho1/eventCalendars/index",
+            },
+        )
+        try:
+            with self.opener.open(req, timeout=10) as resp:
+                res_json = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                return res_json
+        except Exception as e:
+            return {"error": str(e), "data": {"result": "0"}}
+
     def run_check(self) -> dict:
         """
         執行單次爬取與比對：
@@ -293,14 +391,14 @@ class TakachihoScraper:
         2. 正規化後與 baseline 比對
         3. 若有實質差異，永久存檔至 snapshots
         4. 解析所有表單與欄位並輸出
-        5. 同步檢測 Slot API，若開放則嘗試存取 orders/add
+        5. 同步檢測 Slot API，若開放則嘗試 hold_slot 鎖定席位並抓取 orders/add 完整表單
         """
         now = datetime.now()
         timestamp_str = now.strftime("%Y%m%d_%H%M%S")
 
         self.log(f"開始抓取目標網頁 ({self.service_start} 船班)...")
         try:
-            raw_html = fetch_url(self.target_url)
+            raw_html = fetch_url(self.target_url, opener=self.opener)
         except Exception as e:
             self.log(f"[ERROR] 抓取失敗: {e}")
             return {"success": False, "error": str(e)}
@@ -319,6 +417,7 @@ class TakachihoScraper:
             self.service_session_cd,
             self.service_start,
             self.service_end,
+            opener=self.opener,
         )
         self.log(f"【時段 API 狀態】{slot_status.get('status_desc')}")
 
@@ -390,10 +489,12 @@ class TakachihoScraper:
             self.log(f"📋 已儲存表單結構解析: {parsed_file.name}")
             self._print_form_summary(parsed)
 
-        # 5. 若 API 顯示已開放，額外嘗試抓取預約輸入表單頁面 (orders/add)
-        if slot_status.get("is_open"):
-            self.log("🎉 時段已開放預約！嘗試抓取預約輸入表單 (orders/add)...")
+        # 5. 若 API 顯示已開放，或出現預約按鈕，立即鎖位並抓取預約輸入表單
+        if slot_status.get("is_open") or "予約手続き" in raw_html:
+            self.log("🎉 時段已開放預約！立即執行 hold_slot 鎖定席位並抓取完整預約表單...")
             self._fetch_order_page(timestamp_str)
+            # 備用備查：同時執行 Hermes 的 order_detail 介面抓取
+            self._fetch_order_detail(timestamp_str)
 
         return {
             "success": True,
@@ -403,15 +504,33 @@ class TakachihoScraper:
         }
 
     def _fetch_order_page(self, timestamp_str: str):
-        """當開放時，抓取實際訂購頁面 orders/add 並解析"""
+        """
+        當開放時：
+        1. 先發送 hold_slot 進行席位暫時鎖定 (仮押さえ)
+        2. 若鎖位成功，帶相同 Session Cookie 下載 orders/add 完整填寫表單
+        3. 解析所有真實填寫欄位 (氏名、電話、Mail、人數、地址等)
+        """
+        self.log("🔒 [步驟 1/2] 正在向伺服器發送 hold_slot 請求鎖定席位...")
+        hold_res = self.try_hold_slot()
+        result_code = hold_res.get("data", {}).get("result", "0")
+        msg = hold_res.get("message", [])
+        self.log(f"【hold_slot 結果】result: {result_code}, 訊息: {msg or '無'}")
+
+        if result_code == "1":
+            self.log("🎯🎯🎯 席位鎖定成功 (result=1)！已持有該時段，開始下載完整預約表單...")
+        else:
+            self.log(f"[提示] 席位鎖定未成功 (result={result_code})，仍繼續嘗試讀取 orders/add...")
+
         try:
-            order_html = fetch_url(self.order_url)
+            self.log(f"🌐 [步驟 2/2] 以同 Session 抓取預約表單: {self.order_url}")
+            order_html = fetch_url(self.order_url, opener=self.opener)
             order_snap = self.snapshots_dir / f"order_form_{self.session_tag}_{timestamp_str}.html"
             with open(order_snap, "w", encoding="utf-8") as f:
                 f.write(order_html)
-            self.log(f"💾 已存下預約表單原始檔: {order_snap.name}")
+            self.log(f"💾 已存下預約表單原始檔: {order_snap.name} ({len(order_html):,} bytes)")
 
             order_parsed = parse_page_details(order_html)
+            order_parsed["hold_slot_response"] = hold_res
             order_parsed_file = self.snapshots_dir / f"order_form_{self.session_tag}_{timestamp_str}_parsed.json"
             with open(order_parsed_file, "w", encoding="utf-8") as f:
                 json.dump(order_parsed, f, ensure_ascii=False, indent=2)
@@ -419,6 +538,49 @@ class TakachihoScraper:
             self._print_form_summary(order_parsed)
         except Exception as e:
             self.log(f"[WARN] 抓取 orders/add 失敗: {e}")
+
+    def _fetch_order_detail(self, timestamp_str: str):
+        """備用機制：呼叫 order_detail 介面備查"""
+        try:
+            api_url = "https://eipro.jp/takachiho1/apiServices/api/order_detail_datetime_selector"
+            payload = urllib.parse.urlencode({
+                "data[service_cd]": self.service_cd,
+                "data[service_session_cd]": self.service_session_cd,
+                "data[service_start_datetime]": self.service_start,
+                "data[service_end_datetime]": self.service_end,
+            }).encode()
+            req = urllib.request.Request(
+                api_url, data=payload,
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                },
+            )
+            with self.opener.open(req, timeout=15) as resp:
+                data_json = json.loads(resp.read().decode("utf-8", errors="ignore"))
+            raw_html = data_json.get("data", "") if isinstance(data_json, dict) else ""
+
+            if not raw_html:
+                return
+
+            order_detail_snap = self.snapshots_dir / f"order_detail_{self.session_tag}_{timestamp_str}.html"
+            with open(order_detail_snap, "w", encoding="utf-8") as f:
+                f.write(raw_html)
+
+            field_names = sorted(set(re.findall(r'field_name="([^"]*)"', raw_html)) | set(re.findall(r"data-field_name='([^']*)'", raw_html)))
+            parsed = {
+                "session_tag": self.session_tag,
+                "target_url": self.target_url,
+                "field_count": len(field_names),
+                "field_name_list": field_names,
+            }
+            parsed_file = self.snapshots_dir / f"order_detail_{self.session_tag}_{timestamp_str}_parsed.json"
+            with open(parsed_file, "w", encoding="utf-8") as f:
+                json.dump(parsed, f, ensure_ascii=False, indent=2)
+            self.log(f"💾 已存下 order_detail 備查: {order_detail_snap.name}")
+        except Exception as e:
+            self.log(f"[WARN] 抓取 order_detail 失敗: {e}")
 
     def _print_form_summary(self, parsed: dict):
         """印出清晰易讀的表單欄位摘要"""
@@ -439,16 +601,19 @@ class TakachihoScraper:
             print(f"  {i}. <{tag} type='{itype}'> name='{name}' id='{iid}'{val_str}")
         print("=" * 55 + "\n")
 
-    def start_loop(self, interval: int = 5, stop_after_change: bool = False, max_runtime: int = 0):
+    def start_loop(self, interval: int = 2, stop_after_change: bool = False, max_runtime: int = 0):
         """
         定時輪詢監控
-        :param interval: 每次輪詢間隔 (秒)
+        :param interval: 每次輪詢間隔 (秒，預設推薦 2 秒以掌握開賣瞬間)
         :param stop_after_change: 發現實質異動並存檔後自動結束
         :param max_runtime: 最長執行時間 (秒)，0 為不限制
         """
         start_time = time.time()
         max_desc = f"，最長執行 {max_runtime} 秒" if max_runtime > 0 else ""
         self.log(f"開始定時監控 (每 {interval} 秒檢查一次{max_desc}，按 Ctrl+C 結束)...")
+
+        # 啟動時先執行一次 Session 預熱，確保搶票瞬間不用再花時間建立 Session
+        self.prime_session()
 
         try:
             first_run = True
@@ -497,15 +662,23 @@ def main():
     )
     parser.add_argument("--url", default=DEFAULT_TARGET_URL, help="目標網址")
     parser.add_argument("--once", action="store_true", help="只執行一次抓取與比對後結束")
-    parser.add_argument("--interval", type=int, default=5, help="輪詢檢查間隔秒數 (預設: 5 秒)")
+    parser.add_argument("--interval", type=int, default=2, help="輪詢檢查間隔秒數 (預設: 2 秒)")
     parser.add_argument("--stop-on-change", action="store_true", help="當發現實質異動並存檔後自動停止")
     parser.add_argument("--max-runtime", type=int, default=0, help="最長執行時間 (秒)，0 表示無限制")
     parser.add_argument("--status", action="store_true", help="僅查詢目前時段 API 開放狀態")
+    parser.add_argument("--test-hold", action="store_true", help="測試 Session 預熱與 hold_slot 請求連線")
     parser.add_argument("--start-at", type=str, default="", help="預約啟動時間 (格式: 07:59:50)")
 
     args = parser.parse_args()
 
     scraper = TakachihoScraper(target_url=args.url)
+
+    if args.test_hold:
+        scraper.log(f"執行 hold_slot 連線驗證測試...")
+        scraper.prime_session()
+        res = scraper.try_hold_slot()
+        print(f"\n【hold_slot 驗證結果】:\n{json.dumps(res, ensure_ascii=False, indent=2)}")
+        return
 
     if args.status:
         st = check_slot_api(
@@ -513,6 +686,7 @@ def main():
             scraper.service_session_cd,
             scraper.service_start,
             scraper.service_end,
+            opener=scraper.opener,
         )
         print(f"\n時段 [{scraper.session_tag}] 狀態查詢結果:")
         print(json.dumps(st, ensure_ascii=False, indent=2))
