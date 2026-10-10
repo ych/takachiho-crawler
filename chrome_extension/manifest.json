@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "高千穂峡ボート 自動搶位與預約小幫手",
+  "short_name": "TakachihoHelper",
+  "version": "1.0.0",
+  "description": "自動鎖定高千穂峽貸しボート席位 (hold_slot)，秒速自動填寫預約客戶與信用卡資料，無縫銜接 3D Secure 簡訊驗證。",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://eipro.jp/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://eipro.jp/takachiho1/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

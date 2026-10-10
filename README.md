@@ -98,6 +98,20 @@ python3 crawler.py --interval 3 --stop-on-change
 
 ---
 
+## 🛶 Chrome 擴充功能（一鍵秒殺搶位與 3D 驗證最佳解）
+
+為了解決信用卡 3D 驗證（簡訊 OTP）無法在後端 Python 自動完成，以及 eipro.jp 席位保留（`hold_slot` 暫時鎖定 15 分鐘）與 Session Cookie 綁定的機制，本專案提供專屬 Chrome 擴充功能：
+
+目錄：`chrome_extension/`
+詳細說明請見：[`chrome_extension/README.md`](file:///Users/ych/takachiho_crawler/chrome_extension/README.md)
+
+### 核心特色：
+1. **開賣瞬間自動鎖位 (`hold_slot`)**：07:59:59 自動發送鎖位請求，成功立即持有席位 15 分鐘。
+2. **預約表單秒速填寫 (`orders/add`)**：0.3 秒自動填入代表者姓名（漢字與片假名）、電話、Email、地址、大人/幼兒人數及信用卡資料。
+3. **無縫銜接 3D 驗證聲響警報**：完全在桌面 Chrome 執行，跳轉至銀行 3D 驗證頁面時自動發出蜂鳴警報聲，您直接在桌面上輸入簡訊驗證碼完成預約！
+
+---
+
 ## 📝 預約必備資料（根據高千穂觀光協會規定）
 預約表單開放時需填寫代表者資料：
 1. **代表者姓名**（漢字與片假名）
@@ -107,3 +121,4 @@ python3 crawler.py --interval 3 --stop-on-change
 5. **代表者出生年月日**
 6. **搭乘人數**（小學生以上算大人，1 艘船上限 3 名大人；含學齡前幼童最多 4 名）
 7. **信用卡付款**（支援 Visa, MasterCard, JCB, Amex, Diners，需 3D 驗證）
+
