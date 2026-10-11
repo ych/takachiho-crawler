@@ -357,25 +357,25 @@
         <input type="text" id="launchBaseTime" value="08:00:00" placeholder="08:00:00">
       </div>
       <div class="form-group" style="flex: 1.5;">
-        <label for="earlyBufferMs" class="required">提前進入連發搶位</label>
+        <label for="earlyBufferMs" class="required">提前發送時間 (精準抵達)</label>
         <select id="earlyBufferMs">
-          <option value="300">提前 300 毫秒 (07:59:59.700)</option>
-          <option value="400">提前 400 毫秒 (07:59:59.600)</option>
+          <option value="20" selected>提前 20 毫秒 (07:59:59.980 - 🎯 抵達剛好 08:00:00)</option>
+          <option value="30">提前 30 毫秒 (07:59:59.970)</option>
+          <option value="50">提前 50 毫秒 (07:59:59.950)</option>
+          <option value="100">提前 100 毫秒 (07:59:59.900)</option>
+          <option value="200">提前 200 毫秒 (07:59:59.800)</option>
           <option value="500">提前 500 毫秒 (07:59:59.500)</option>
-          <option value="600" selected>提前 600 毫秒 (07:59:59.400 - 推薦)</option>
-          <option value="800">提前 800 毫秒 (07:59:59.200)</option>
-          <option value="1000">提前 1.0 秒 (07:59:59.000)</option>
         </select>
       </div>
     </div>
 
     <div class="trigger-preview" id="triggerPreview">
-      🔥 搶位發動時間：07:59:59.400（以 120ms 密集波浪重送，直到鎖定席位）
+      🎯 首發發動時間：07:59:59.980（剛好於 08:00:00.000 抵達伺服器，若未開則以 250ms 溫和重送）
     </div>
 
     <label class="checkbox-group">
       <input type="checkbox" id="autoHold" checked>
-      <span>到達時間立即啟動波浪密集搶位 (hold_slot 鎖定 15 分鐘)</span>
+      <span>到達時間精準鎖位 (hold_slot 鎖定 15 分鐘，以 250ms 安全重試)</span>
     </label>
 
     <label class="checkbox-group">

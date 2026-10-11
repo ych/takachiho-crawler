@@ -107,8 +107,8 @@
           targetDate: '2026/11/07',
           targetTime: '08:30:00',
           launchBaseTime: '08:00:00',
-          earlyBufferMs: '600',
-          launchTime: '07:59:59.400',
+          earlyBufferMs: '20',
+          launchTime: '07:59:59.980',
           adultCount: '2',
           childCount: '0',
           autoHold: true,
@@ -536,11 +536,12 @@
     }
   }
 
-  // 🔥 波浪密集鎖位核心 (Burst Hold Mode - 每 100ms 重送，直到成功鎖定席位)
+  // 🎯 精準鎖位核心 (利用 20ms 單向延遲首發命中，隨後以 250ms 安全重試)
   async function startBurstHold(isManual = false) {
     if (isBursting || slotLocked) return;
     isBursting = true;
     burstAttempts = 0;
+    const SAFE_MAX_ATTEMPTS = 12; // 最多重試 12 次 (約 3 秒，安全不被擋)
 
     if (!resolvedSessionCd) {
       await resolveSessionCd();
@@ -550,7 +551,7 @@
     const startDt = `${config.targetDate} ${config.targetTime}`;
     const endDt = getEndDatetime(startDt);
 
-    updateStatus('burst', '🔥 暴風搶位中 (100ms 連發)...');
+    updateStatus('burst', '🎯 精準鎖位中 (首發命中，250ms 安全重送)...');
 
     // 雙軌防護：若頁面出現「予約手続き」按鈕，同步秒速點擊
     const checkAndClickBtn = () => {
@@ -567,10 +568,10 @@
       burstAttempts++;
       checkAndClickBtn();
 
-      updateStatus('burst', `🔥 搶位重送中 (第 ${burstAttempts} 發)...`);
+      updateStatus('burst', `🎯 鎖位請求中 (第 ${burstAttempts} 次)...`);
 
       const json = await sendHoldSlotRequest(sessionCd, startDt, endDt);
-      console.log(`[TakachihoHelper][第 ${burstAttempts} 發] 回應:`, json);
+      console.log(`[TakachihoHelper][第 ${burstAttempts} 次] 回應:`, json);
 
       if (json && json.data && String(json.data.result) === '1') {
         // 🎉 席位鎖定成功！
@@ -586,24 +587,24 @@
         setTimeout(() => {
           const orderUrl = `/takachiho1/orders/add?service_cd=${encodeURIComponent(SERVICE_CD)}&service_session_cd=${encodeURIComponent(sessionCd)}&service_start_datetime=${encodeURIComponent(startDt)}&service_end_datetime=${encodeURIComponent(endDt)}`;
           window.location.href = orderUrl;
-        }, 500);
+        }, 400);
         return;
       }
 
       // If full or exceeded max retries
-      if (burstAttempts >= MAX_BURST_ATTEMPTS) {
+      if (burstAttempts >= SAFE_MAX_ATTEMPTS) {
         isBursting = false;
         if (burstInterval) clearInterval(burstInterval);
-        const msg = (json && json.message && json.message[0]) || '已達到重試上限或已額滿';
+        const msg = (json && json.message && json.message[0]) || '已完成嘗試或已額滿';
         updateStatus('waiting', `⚠️ ${msg}`);
       }
     };
 
-    // First shot immediately
+    // First shot immediately (at 07:59:59.980, reaching server right at 08:00:00.000!)
     doHoldTick();
 
-    // Subsequent shots every 100ms
-    burstInterval = setInterval(doHoldTick, 100);
+    // Subsequent shots safely every 250ms (human-like rapid click, 0 risk of rate limit)
+    burstInterval = setInterval(doHoldTick, 250);
   }
 
   // Giant Celebration Modal on Slot Hold Success

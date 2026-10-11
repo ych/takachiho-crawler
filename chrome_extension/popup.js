@@ -7,7 +7,7 @@ const DEFAULT_SETTINGS = {
   targetDate: '2026/11/07',
   targetTime: '08:30:00',
   launchBaseTime: '08:00:00',
-  earlyBufferMs: '600', // 提前 600ms (07:59:59.400)
+  earlyBufferMs: '20', // 提前 20ms (07:59:59.980 - 剛好抵達 08:00:00.000)
   adultCount: '2',
   childCount: '0',
   autoHold: true,
@@ -49,7 +49,7 @@ const els = {
   statusMsg: document.getElementById('statusMsg')
 };
 
-// Calculate effective trigger time string (e.g. 08:00:00 - 600ms = 07:59:59.400)
+// Calculate effective trigger time string (e.g. 08:00:00 - 20ms = 07:59:59.980)
 function calculateTriggerTime(baseTimeStr, bufferMs) {
   try {
     const parts = baseTimeStr.split(':');
@@ -67,7 +67,7 @@ function calculateTriggerTime(baseTimeStr, bufferMs) {
     const pad = (n, len = 2) => String(n).padStart(len, '0');
     return `${pad(resH)}:${pad(resM)}:${pad(resS)}.${pad(resMs, 3)}`;
   } catch (e) {
-    return '07:59:59.400';
+    return '07:59:59.980';
   }
 }
 
@@ -76,7 +76,7 @@ function updateTriggerPreview() {
   const baseTime = els.launchBaseTime.value.trim() || '08:00:00';
   const bufferMs = els.earlyBufferMs.value;
   const triggerStr = calculateTriggerTime(baseTime, bufferMs);
-  els.triggerPreview.textContent = `🔥 搶位發動時間：${triggerStr}（提前 ${bufferMs}ms 進入密集波浪重送，直到鎖定席位）`;
+  els.triggerPreview.textContent = `🎯 首發發動時間：${triggerStr}（提前 ${bufferMs}ms 命中開賣瞬間，未開則 250ms 安全重試）`;
 }
 
 els.launchBaseTime.addEventListener('input', updateTriggerPreview);
