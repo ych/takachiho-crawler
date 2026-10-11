@@ -9,3 +9,7 @@ temp/
 
 # macOS
 .DS_Store
+
+# Build artifacts
+dist/
+*.zip

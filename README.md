@@ -4,6 +4,17 @@
 
 ---
 
+## 📥 擴充功能直接下載（免用 Git，下載即可使用）
+
+如果您或同行的旅伴需要使用搶位擴充功能，可以直接下載預先打包好的 ZIP 壓縮檔：
+* 📦 **[點此直接下載 takachiho-boat-helper.zip (最新發行版 v1.0.0)](https://github.com/ych/takachiho-crawler/releases/download/v1.0.0/takachiho-boat-helper.zip)**
+* 🌐 **[GitHub Releases 官方發布頁](https://github.com/ych/takachiho-crawler/releases/latest)**
+
+> **3 步驟安裝使用**：
+> 1. 下載並解壓縮 `takachiho-boat-helper.zip`。
+> 2. 打開 Chrome 瀏覽器前往 `chrome://extensions/`，開啟右上角「開發人員模式」。
+> 3. 點擊「載入未封裝項目」，選擇解壓縮出來的 `takachiho-boat-helper` 資料夾即可！
+
 ## 🎯 預約規則與時程
 
 * **系統網址**：`https://eipro.jp/takachiho1/`
