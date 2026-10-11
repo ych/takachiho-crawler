@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>高千穂峡ボート 預約小幫手</title>
+  <title>高千穂峡ボート 極速佔位小幫手</title>
   <style>
     :root {
       --primary: #0284c7;
@@ -10,6 +10,7 @@
       --primary-light: #e0f2fe;
       --success: #16a34a;
       --danger: #dc2626;
+      --warning: #d97706;
       --bg: #f8fafc;
       --card-bg: #ffffff;
       --text: #0f172a;
@@ -40,8 +41,8 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      padding-bottom: 10px;
-      margin-bottom: 10px;
+      padding-bottom: 8px;
+      margin-bottom: 8px;
       border-bottom: 1px solid var(--border);
     }
 
@@ -60,6 +61,23 @@
     .header-title p {
       font-size: 11px;
       color: var(--text-muted);
+    }
+
+    .mission-banner {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      color: #fff;
+      padding: 8px 10px;
+      border-radius: var(--radius);
+      font-size: 11px;
+      line-height: 1.4;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 4px rgba(2, 132, 199, 0.2);
+    }
+
+    .mission-banner strong {
+      font-size: 12px;
+      display: block;
+      margin-bottom: 2px;
     }
 
     .card {
@@ -109,8 +127,6 @@
     }
 
     input[type="text"],
-    input[type="email"],
-    input[type="password"],
     input[type="number"],
     select {
       width: 100%;
@@ -130,11 +146,50 @@
       box-shadow: 0 0 0 2px var(--primary-light);
     }
 
+    .url-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .btn-xs {
+      height: 24px;
+      padding: 0 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: #f1f5f9;
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .btn-xs:hover {
+      background: #e2e8f0;
+    }
+
+    .trigger-preview {
+      background: #fefce8;
+      border: 1px solid #fef08a;
+      color: #854d0e;
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
     .checkbox-group {
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-top: 4px;
+      margin-top: 5px;
       cursor: pointer;
     }
 
@@ -151,23 +206,27 @@
       color: var(--text);
     }
 
-    .privacy-badge {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: #f1f5f9;
-      border-radius: 4px;
+    details {
+      margin-top: 4px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
       padding: 6px 8px;
+      background: #f8fafc;
+    }
+
+    summary {
       font-size: 11px;
+      font-weight: 600;
       color: var(--text-muted);
-      margin-top: 6px;
+      cursor: pointer;
+      outline: none;
     }
 
     .actions {
       display: flex;
       flex-direction: column;
       gap: 6px;
-      margin-top: 6px;
+      margin-top: 8px;
     }
 
     .btn {
@@ -190,19 +249,6 @@
     }
     .btn-primary:hover {
       background: var(--primary-hover);
-    }
-
-    .btn-secondary {
-      background: #e2e8f0;
-      color: #334155;
-    }
-    .btn-secondary:hover {
-      background: #cbd5e1;
-    }
-
-    .btn-success {
-      background: var(--success);
-      color: #fff;
     }
 
     .status-msg {
@@ -230,21 +276,36 @@
   <header>
     <img src="icons/icon48.png" alt="icon" class="header-icon">
     <div class="header-title">
-      <h1>高千穂峡ボート 預約助手</h1>
-      <p>自動鎖位 (hold_slot) • 自動填表 • 3D 驗證警報</p>
+      <h1>高千穂峡ボート 極速佔位助手</h1>
+      <p>專注於毫秒鎖位 (hold_slot) • 取得 15 分鐘保留期</p>
     </div>
   </header>
 
-  <!-- 1. 預約時段設定 -->
+  <div class="mission-banner">
+    <strong>🎯 唯一核心目標：搶下席位 (仮押さえ)！</strong>
+    只要搶先鎖定席位，系統將為您獨占保留整整 15 分鐘！後續資料輸入由您在桌面上從容填寫即可。
+  </div>
+
+  <!-- 1. 目標連結與船班設定 -->
   <div class="card">
-    <div class="card-title">🎯 預約時段設定</div>
+    <div class="card-title">🔗 目標連結與預約時段</div>
+    
+    <div class="form-group">
+      <label for="targetUrl" class="required">目標預約連結 (活動頁或日曆頁)</label>
+      <input type="text" id="targetUrl" placeholder="https://eipro.jp/takachiho1/eventCalendars/index">
+      <div class="url-actions">
+        <button type="button" class="btn-xs" id="btnUseCurrentUrl">📍 抓取當前分頁網址</button>
+        <button type="button" class="btn-xs" id="btnGoTargetUrl">🌐 開啟此目標網址</button>
+      </div>
+    </div>
+
     <div class="form-row">
       <div class="form-group" style="flex: 1.4;">
         <label for="targetDate" class="required">目標日期</label>
         <input type="text" id="targetDate" placeholder="YYYY/MM/DD" value="2026/11/07">
       </div>
       <div class="form-group" style="flex: 1.2;">
-        <label for="targetTime" class="required">船班時段</label>
+        <label for="targetTime" class="required">目標時段</label>
         <select id="targetTime">
           <option value="08:30:00" selected>08:30 - 09:00</option>
           <option value="09:00:00">09:00 - 09:30</option>
@@ -283,151 +344,83 @@
           <option value="1">1 名</option>
         </select>
       </div>
+    </div>
+  </div>
+
+  <!-- 2. 極速波浪搶位設定 (核心引擎) -->
+  <div class="card">
+    <div class="card-title">⚡ 搶位時機與波浪連發設定</div>
+
+    <div class="form-row">
       <div class="form-group" style="flex: 1.2;">
-        <label for="launchTime">開搶啟動時間 (台灣)</label>
-        <input type="text" id="launchTime" value="07:59:59.500" placeholder="07:59:59.500">
+        <label for="launchBaseTime" class="required">開賣時間 (台灣)</label>
+        <input type="text" id="launchBaseTime" value="08:00:00" placeholder="08:00:00">
       </div>
+      <div class="form-group" style="flex: 1.5;">
+        <label for="earlyBufferMs" class="required">提前進入連發搶位</label>
+        <select id="earlyBufferMs">
+          <option value="300">提前 300 毫秒 (07:59:59.700)</option>
+          <option value="400">提前 400 毫秒 (07:59:59.600)</option>
+          <option value="500">提前 500 毫秒 (07:59:59.500)</option>
+          <option value="600" selected>提前 600 毫秒 (07:59:59.400 - 推薦)</option>
+          <option value="800">提前 800 毫秒 (07:59:59.200)</option>
+          <option value="1000">提前 1.0 秒 (07:59:59.000)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="trigger-preview" id="triggerPreview">
+      🔥 搶位發動時間：07:59:59.400（以 120ms 密集波浪重送，直到鎖定席位）
     </div>
 
     <label class="checkbox-group">
       <input type="checkbox" id="autoHold" checked>
-      <span>啟動時自動搶先鎖定席位 (hold_slot 鎖定 15 分鐘)</span>
+      <span>到達時間立即啟動波浪密集搶位 (hold_slot 鎖定 15 分鐘)</span>
     </label>
 
     <label class="checkbox-group">
-      <input type="checkbox" id="autoFill" checked>
-      <span>進入預約表單 (orders/add) 後自動填入所有資料</span>
-    </label>
-
-    <label class="checkbox-group">
-      <input type="checkbox" id="autoSubmit" checked>
-      <span>填表完成後自動點擊送出前往確認頁面</span>
+      <input type="checkbox" id="autoClickStatement" checked>
+      <span>若在活動頁偵測到「予約手続き」按鈕出現，立即毫秒自動點擊</span>
     </label>
   </div>
 
-  <!-- 2. 代表者個人資料 -->
-  <div class="card">
-    <div class="card-title">👤 代表者個人資料</div>
-    <div class="form-row">
-      <div class="form-group">
-        <label for="lName" class="required">姓 (漢字/護照英文)</label>
-        <input type="text" id="lName" placeholder="例如：王 或 WANG">
+  <!-- 3. 選填備份 (僅供參考/快速複製，不影響搶位) -->
+  <details>
+    <summary>📋 選填：個人資料備忘 (方便在預約頁面一鍵複製)</summary>
+    <div style="margin-top: 8px;">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="lName">代表者 姓</label>
+          <input type="text" id="lName" placeholder="例如：王 或 WANG">
+        </div>
+        <div class="form-group">
+          <label for="fName">代表者 名</label>
+          <input type="text" id="fName" placeholder="例如：大明 或 DAMING">
+        </div>
       </div>
-      <div class="form-group">
-        <label for="fName" class="required">名 (漢字/護照英文)</label>
-        <input type="text" id="fName" placeholder="例如：大明 或 DAMING">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="tel">聯絡手機</label>
+          <input type="text" id="tel" placeholder="+886912345678">
+        </div>
+        <div class="form-group">
+          <label for="email">電子信箱</label>
+          <input type="text" id="email" placeholder="example@gmail.com">
+        </div>
       </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label for="lNameKana" class="required">姓 フリガナ (片假名)</label>
-        <input type="text" id="lNameKana" placeholder="例如：ワン">
-      </div>
-      <div class="form-group">
-        <label for="fNameKana" class="required">名 フリガナ (片假名)</label>
-        <input type="text" id="fNameKana" placeholder="例如：ダイミン">
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label for="email" class="required">電子郵件信箱</label>
-        <input type="email" id="email" placeholder="接收預約確認與通知信">
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label for="tel" class="required">聯絡手機</label>
-        <input type="text" id="tel" placeholder="例如：+886912345678">
-      </div>
-      <div class="form-group">
-        <label for="birthday" class="required">出生年月日</label>
-        <input type="text" id="birthday" placeholder="YYYY/MM/DD">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="cardNumber">信用卡卡號 (備忘)</label>
+          <input type="text" id="cardNumber" placeholder="4111222233334444">
+        </div>
       </div>
     </div>
-
-    <div class="form-row">
-      <div class="form-group" style="flex: 1;">
-        <label for="zip" class="required">郵遞區號</label>
-        <input type="text" id="zip" value="882-1101">
-      </div>
-      <div class="form-group" style="flex: 2;">
-        <label for="address" class="required">日本住址 / 住宿飯店</label>
-        <input type="text" id="address" value="宮崎県西臼杵郡高千穂町大字三田井御塩井">
-      </div>
-    </div>
-  </div>
-
-  <!-- 3. 信用卡資料 -->
-  <div class="card">
-    <div class="card-title">💳 信用卡付款 (PayJP 閘道)</div>
-    <div class="form-row">
-      <div class="form-group">
-        <label for="cardNumber" class="required">卡號 (16 碼)</label>
-        <input type="text" id="cardNumber" placeholder="4111222233334444" maxlength="19">
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label for="expMonth" class="required">到期月 (MM)</label>
-        <select id="expMonth">
-          <option value="01">01</option>
-          <option value="02">02</option>
-          <option value="03">03</option>
-          <option value="04">04</option>
-          <option value="05">05</option>
-          <option value="06">06</option>
-          <option value="07">07</option>
-          <option value="08">08</option>
-          <option value="09">09</option>
-          <option value="10">10</option>
-          <option value="11">11</option>
-          <option value="12">12</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="expYear" class="required">到期年 (YY)</label>
-        <select id="expYear">
-          <option value="25">2025 (25)</option>
-          <option value="26">2026 (26)</option>
-          <option value="27">2027 (27)</option>
-          <option value="28" selected>2028 (28)</option>
-          <option value="29">2029 (29)</option>
-          <option value="30">2030 (30)</option>
-          <option value="31">2031 (31)</option>
-          <option value="32">2032 (32)</option>
-          <option value="33">2033 (33)</option>
-          <option value="34">2034 (34)</option>
-          <option value="35">2035 (35)</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="cvc" class="required">安全碼 (CVC)</label>
-        <input type="password" id="cvc" placeholder="3或4碼" maxlength="4">
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label for="cardHolder">持卡人英文姓名</label>
-        <input type="text" id="cardHolder" placeholder="例如：DAMING WANG">
-      </div>
-    </div>
-
-    <div class="privacy-badge">
-      🔒 隱私保護：所有個人與信用卡資料僅安全保存在本機 Chrome 儲存空間，絕不對外傳輸。
-    </div>
-  </div>
+  </details>
 
   <div class="status-msg" id="statusMsg"></div>
 
   <div class="actions">
-    <button type="button" class="btn btn-primary" id="btnSave">💾 儲存所有預約設定</button>
-    <button type="button" class="btn btn-secondary" id="btnOpenCalendar">🌐 開啟高千穂峽預約日曆</button>
-    <button type="button" class="btn btn-secondary" id="btnTestAutofill">🧪 立即在當前分頁測試填表</button>
+    <button type="button" class="btn btn-primary" id="btnSave">💾 儲存搶位設定</button>
   </div>
 
   <script src="popup.js"></script>

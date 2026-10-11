@@ -3,101 +3,109 @@
 const STORAGE_KEY = 'takachiho_booking_profile';
 
 const DEFAULT_SETTINGS = {
+  targetUrl: 'https://eipro.jp/takachiho1/eventCalendars/index',
   targetDate: '2026/11/07',
   targetTime: '08:30:00',
+  launchBaseTime: '08:00:00',
+  earlyBufferMs: '600', // 提前 600ms (07:59:59.400)
   adultCount: '2',
   childCount: '0',
-  launchTime: '07:59:59.500',
   autoHold: true,
-  autoFill: true,
-  autoSubmit: true,
+  autoClickStatement: true,
 
-  // Customer
+  // Memo (選填備忘)
   lName: '',
   fName: '',
-  lNameKana: '',
-  fNameKana: '',
-  email: '',
   tel: '',
-  birthday: '1990/01/01',
-  zip: '882-1101',
-  address: '宮崎県西臼杵郡高千穂町大字三田井御塩井',
-
-  // Credit Card
-  cardNumber: '',
-  expMonth: '12',
-  expYear: '28',
-  cvc: '',
-  cardHolder: ''
+  email: '',
+  cardNumber: ''
 };
 
 // UI Elements
 const els = {
+  targetUrl: document.getElementById('targetUrl'),
+  btnUseCurrentUrl: document.getElementById('btnUseCurrentUrl'),
+  btnGoTargetUrl: document.getElementById('btnGoTargetUrl'),
+
   targetDate: document.getElementById('targetDate'),
   targetTime: document.getElementById('targetTime'),
   adultCount: document.getElementById('adultCount'),
   childCount: document.getElementById('childCount'),
-  launchTime: document.getElementById('launchTime'),
+
+  launchBaseTime: document.getElementById('launchBaseTime'),
+  earlyBufferMs: document.getElementById('earlyBufferMs'),
+  triggerPreview: document.getElementById('triggerPreview'),
+
   autoHold: document.getElementById('autoHold'),
-  autoFill: document.getElementById('autoFill'),
-  autoSubmit: document.getElementById('autoSubmit'),
+  autoClickStatement: document.getElementById('autoClickStatement'),
 
   lName: document.getElementById('lName'),
   fName: document.getElementById('fName'),
-  lNameKana: document.getElementById('lNameKana'),
-  fNameKana: document.getElementById('fNameKana'),
-  email: document.getElementById('email'),
   tel: document.getElementById('tel'),
-  birthday: document.getElementById('birthday'),
-  zip: document.getElementById('zip'),
-  address: document.getElementById('address'),
-
+  email: document.getElementById('email'),
   cardNumber: document.getElementById('cardNumber'),
-  expMonth: document.getElementById('expMonth'),
-  expYear: document.getElementById('expYear'),
-  cvc: document.getElementById('cvc'),
-  cardHolder: document.getElementById('cardHolder'),
 
   btnSave: document.getElementById('btnSave'),
-  btnOpenCalendar: document.getElementById('btnOpenCalendar'),
-  btnTestAutofill: document.getElementById('btnTestAutofill'),
   statusMsg: document.getElementById('statusMsg')
 };
 
-// Format Card Number input (remove non-digits)
-els.cardNumber.addEventListener('input', (e) => {
-  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 16);
-});
+// Calculate effective trigger time string (e.g. 08:00:00 - 600ms = 07:59:59.400)
+function calculateTriggerTime(baseTimeStr, bufferMs) {
+  try {
+    const parts = baseTimeStr.split(':');
+    let h = parseInt(parts[0], 10) || 8;
+    let m = parseInt(parts[1], 10) || 0;
+    let s = parseInt(parts[2], 10) || 0;
+    let totalMs = (h * 3600 + m * 60 + s) * 1000 - parseInt(bufferMs, 10);
+    if (totalMs < 0) totalMs += 24 * 3600 * 1000;
+
+    const resH = Math.floor(totalMs / 3600000) % 24;
+    const resM = Math.floor((totalMs % 3600000) / 60000);
+    const resS = Math.floor((totalMs % 60000) / 1000);
+    const resMs = totalMs % 1000;
+
+    const pad = (n, len = 2) => String(n).padStart(len, '0');
+    return `${pad(resH)}:${pad(resM)}:${pad(resS)}.${pad(resMs, 3)}`;
+  } catch (e) {
+    return '07:59:59.400';
+  }
+}
+
+// Update trigger preview text
+function updateTriggerPreview() {
+  const baseTime = els.launchBaseTime.value.trim() || '08:00:00';
+  const bufferMs = els.earlyBufferMs.value;
+  const triggerStr = calculateTriggerTime(baseTime, bufferMs);
+  els.triggerPreview.textContent = `🔥 搶位發動時間：${triggerStr}（提前 ${bufferMs}ms 進入密集波浪重送，直到鎖定席位）`;
+}
+
+els.launchBaseTime.addEventListener('input', updateTriggerPreview);
+els.earlyBufferMs.addEventListener('change', updateTriggerPreview);
 
 // Load settings from storage
 function loadSettings() {
   chrome.storage.local.get([STORAGE_KEY], (res) => {
     const data = Object.assign({}, DEFAULT_SETTINGS, res[STORAGE_KEY] || {});
 
-    els.targetDate.value = data.targetDate;
-    els.targetTime.value = data.targetTime;
-    els.adultCount.value = data.adultCount;
-    els.childCount.value = data.childCount;
-    els.launchTime.value = data.launchTime;
-    els.autoHold.checked = Boolean(data.autoHold);
-    els.autoFill.checked = Boolean(data.autoFill);
-    els.autoSubmit.checked = Boolean(data.autoSubmit);
+    els.targetUrl.value = data.targetUrl || DEFAULT_SETTINGS.targetUrl;
+    els.targetDate.value = data.targetDate || DEFAULT_SETTINGS.targetDate;
+    els.targetTime.value = data.targetTime || DEFAULT_SETTINGS.targetTime;
+    els.adultCount.value = data.adultCount || '2';
+    els.childCount.value = data.childCount || '0';
 
-    els.lName.value = data.lName || '';
-    els.fName.value = data.fName || '';
-    els.lNameKana.value = data.lNameKana || '';
-    els.fNameKana.value = data.fNameKana || '';
-    els.email.value = data.email || '';
-    els.tel.value = data.tel || '';
-    els.birthday.value = data.birthday || '';
-    els.zip.value = data.zip || '882-1101';
-    els.address.value = data.address || '';
+    els.launchBaseTime.value = data.launchBaseTime || DEFAULT_SETTINGS.launchBaseTime;
+    els.earlyBufferMs.value = data.earlyBufferMs || DEFAULT_SETTINGS.earlyBufferMs;
 
-    els.cardNumber.value = data.cardNumber || '';
-    els.expMonth.value = data.expMonth || '12';
-    els.expYear.value = data.expYear || '28';
-    els.cvc.value = data.cvc || '';
-    els.cardHolder.value = data.cardHolder || '';
+    els.autoHold.checked = data.autoHold !== false;
+    els.autoClickStatement.checked = data.autoClickStatement !== false;
+
+    if (els.lName) els.lName.value = data.lName || '';
+    if (els.fName) els.fName.value = data.fName || '';
+    if (els.tel) els.tel.value = data.tel || '';
+    if (els.email) els.email.value = data.email || '';
+    if (els.cardNumber) els.cardNumber.value = data.cardNumber || '';
+
+    updateTriggerPreview();
   });
 }
 
@@ -112,35 +120,32 @@ function showStatus(text, isError = false) {
 
 // Save settings to storage
 function saveSettings() {
+  const baseTime = els.launchBaseTime.value.trim() || '08:00:00';
+  const bufferMs = els.earlyBufferMs.value;
+  const computedLaunchTime = calculateTriggerTime(baseTime, bufferMs);
+
   const profile = {
+    targetUrl: els.targetUrl.value.trim() || DEFAULT_SETTINGS.targetUrl,
     targetDate: els.targetDate.value.trim(),
     targetTime: els.targetTime.value,
+    launchBaseTime: baseTime,
+    earlyBufferMs: bufferMs,
+    launchTime: computedLaunchTime, // 實際發送時間
+
     adultCount: els.adultCount.value,
     childCount: els.childCount.value,
-    launchTime: els.launchTime.value.trim(),
     autoHold: els.autoHold.checked,
-    autoFill: els.autoFill.checked,
-    autoSubmit: els.autoSubmit.checked,
+    autoClickStatement: els.autoClickStatement.checked,
 
-    lName: els.lName.value.trim(),
-    fName: els.fName.value.trim(),
-    lNameKana: els.lNameKana.value.trim(),
-    fNameKana: els.fNameKana.value.trim(),
-    email: els.email.value.trim(),
-    tel: els.tel.value.trim(),
-    birthday: els.birthday.value.trim(),
-    zip: els.zip.value.trim(),
-    address: els.address.value.trim(),
-
-    cardNumber: els.cardNumber.value.replace(/\s+/g, ''),
-    expMonth: els.expMonth.value,
-    expYear: els.expYear.value,
-    cvc: els.cvc.value.trim(),
-    cardHolder: els.cardHolder.value.trim().toUpperCase()
+    lName: els.lName ? els.lName.value.trim() : '',
+    fName: els.fName ? els.fName.value.trim() : '',
+    tel: els.tel ? els.tel.value.trim() : '',
+    email: els.email ? els.email.value.trim() : '',
+    cardNumber: els.cardNumber ? els.cardNumber.value.replace(/\s+/g, '') : ''
   };
 
   chrome.storage.local.set({ [STORAGE_KEY]: profile }, () => {
-    showStatus('✅ 預約設定已成功儲存！');
+    showStatus('✅ 搶位設定已成功儲存！');
 
     // Notify any active eipro tab to reload settings immediately
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -151,32 +156,25 @@ function saveSettings() {
   });
 }
 
-// Open eipro reservation calendar
-els.btnOpenCalendar.addEventListener('click', () => {
-  const targetUrl = 'https://eipro.jp/takachiho1/eventCalendars/index';
-  chrome.tabs.query({ url: '*://eipro.jp/takachiho1/*' }, (tabs) => {
-    if (tabs.length > 0) {
-      chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl });
-    } else {
-      chrome.tabs.create({ url: targetUrl });
+// Use current active tab URL
+els.btnUseCurrentUrl.addEventListener('click', () => {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0] && tabs[0].url) {
+      els.targetUrl.value = tabs[0].url;
+      showStatus('📍 已抓取當前分頁網址！記得點擊「儲存搶位設定」');
     }
   });
 });
 
-// Trigger test autofill on current tab
-els.btnTestAutofill.addEventListener('click', () => {
-  saveSettings();
+// Navigate to Target URL
+els.btnGoTargetUrl.addEventListener('click', () => {
+  const url = els.targetUrl.value.trim() || DEFAULT_SETTINGS.targetUrl;
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (!tabs[0] || !tabs[0].id) return;
-    chrome.tabs.sendMessage(tabs[0].id, { action: 'TRIGGER_AUTOFILL' }, (response) => {
-      if (chrome.runtime.lastError || !response) {
-        showStatus('⚠️ 請先開啟 eipro.jp 預約頁面再測試', true);
-      } else if (response.success) {
-        showStatus('🎉 已成功自動填入當前頁面表單！');
-      } else {
-        showStatus(`⚠️ 填表提示: ${response.message || '未找到對應欄位'}`, true);
-      }
-    });
+    if (tabs[0] && tabs[0].id) {
+      chrome.tabs.update(tabs[0].id, { url: url });
+    } else {
+      chrome.tabs.create({ url: url });
+    }
   });
 });
 

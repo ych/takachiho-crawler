@@ -1,4 +1,4 @@
-// content.js - Takachiho Gorge Boat Reservation Assistant (高千穂峡ボート 預約助手)
+// content.js - Takachiho Gorge Boat Slot-Locking Specialist (高千穂峡ボート 極速佔位助手)
 (function () {
   'use strict';
 
@@ -7,9 +7,11 @@
 
   let config = null;
   let resolvedSessionCd = '';
-  let isHolding = false;
-  let retryCount = 0;
-  const MAX_RETRIES = 50;
+  let isBursting = false;
+  let slotLocked = false;
+  let burstInterval = null;
+  let burstAttempts = 0;
+  const MAX_BURST_ATTEMPTS = 60; // 最多連發 60 次 (約 6~7 秒)
   let countdownTimer = null;
   let audioCtx = null;
   let alarmInterval = null;
@@ -39,7 +41,7 @@
         const gain = ctx.createGain();
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.12);
-        gain.gain.setValueAtTime(0.25, ctx.currentTime + idx * 0.12);
+        gain.gain.setValueAtTime(0.35, ctx.currentTime + idx * 0.12);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.12 + 0.35);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -76,7 +78,6 @@
 
   // Calculate End Datetime (add 30 minutes)
   function getEndDatetime(startDatetimeStr) {
-    // e.g. 2026/11/07 08:30:00 -> 2026/11/07 09:00:00
     try {
       const parts = startDatetimeStr.split(' ');
       const dateParts = parts[0].split('/');
@@ -90,7 +91,7 @@
         parseInt(timeParts[2], 10)
       );
       d.setMinutes(d.getMinutes() + 30);
-      const pad = (n) => String(n).padStart(2, '0');
+      const pad = (n, len = 2) => String(n).padStart(len, '0');
       return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     } catch (e) {
       return startDatetimeStr;
@@ -102,14 +103,16 @@
     return new Promise((resolve) => {
       chrome.storage.local.get([STORAGE_KEY], (res) => {
         config = res[STORAGE_KEY] || {
+          targetUrl: 'https://eipro.jp/takachiho1/eventCalendars/index',
           targetDate: '2026/11/07',
           targetTime: '08:30:00',
+          launchBaseTime: '08:00:00',
+          earlyBufferMs: '600',
+          launchTime: '07:59:59.400',
           adultCount: '2',
           childCount: '0',
-          launchTime: '07:59:59.500',
           autoHold: true,
-          autoFill: true,
-          autoSubmit: true
+          autoClickStatement: true
         };
         resolve(config);
       });
@@ -133,7 +136,7 @@
           font-size: 13px;
           line-height: 1.4;
           color: #0f172a;
-          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.15);
         }
         .th-panel {
           width: 320px;
@@ -175,14 +178,14 @@
           padding: 10px 12px;
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 7px;
         }
         .th-info-row {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          font-size: 12px;
-          padding-bottom: 4px;
+          font-size: 11px;
+          padding-bottom: 3px;
           border-bottom: 1px dashed #e2e8f0;
         }
         .th-info-label {
@@ -192,6 +195,10 @@
         .th-info-val {
           font-weight: 700;
           color: #0369a1;
+          max-width: 180px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         .th-status-badge {
           display: flex;
@@ -210,6 +217,12 @@
           color: #854d0e;
           border-color: #fef08a;
         }
+        .th-status-badge.burst {
+          background: #fee2e2;
+          color: #b91c1c;
+          border-color: #fca5a5;
+          animation: th-burst-pulse 0.4s infinite alternate;
+        }
         .th-status-badge.working {
           background: #e0f2fe;
           color: #0369a1;
@@ -219,10 +232,10 @@
           background: #fee2e2;
           color: #991b1b;
           border-color: #fecaca;
-          animation: th-pulse 1s infinite alternate;
+          animation: th-burst-pulse 1s infinite alternate;
         }
-        @keyframes th-pulse {
-          from { opacity: 0.8; }
+        @keyframes th-burst-pulse {
+          from { opacity: 0.85; transform: scale(1.0); }
           to { opacity: 1; transform: scale(1.02); }
         }
         .th-clock {
@@ -237,9 +250,9 @@
           border: 1px solid #e2e8f0;
         }
         .th-actions {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 6px;
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
           margin-top: 2px;
         }
         .th-btn {
@@ -250,7 +263,7 @@
           height: 32px;
           border: none;
           border-radius: 5px;
-          font-size: 11px;
+          font-size: 12px;
           font-weight: 600;
           cursor: pointer;
           transition: background 0.15s;
@@ -258,7 +271,6 @@
         .th-btn-primary {
           background: #0284c7;
           color: #fff;
-          grid-column: span 2;
         }
         .th-btn-primary:hover {
           background: #0369a1;
@@ -271,29 +283,20 @@
         .th-btn-secondary:hover {
           background: #e2e8f0;
         }
-        .th-btn-fastcopy {
+        .th-memo-box {
           background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          color: #475569;
-          font-size: 10px;
-          padding: 3px 6px;
+          border: 1px dashed #cbd5e1;
+          padding: 6px;
           border-radius: 4px;
-          cursor: pointer;
-          margin-top: 2px;
-        }
-        .th-btn-fastcopy:hover {
-          background: #e2e8f0;
-        }
-        .th-copy-bar {
-          display: flex;
-          gap: 4px;
-          justify-content: space-between;
+          font-size: 11px;
+          color: #475569;
+          line-height: 1.4;
         }
       </style>
       <div class="th-panel" id="thPanel">
         <div class="th-header" id="thHeader">
           <div class="th-header-title">
-            <span>🛶 高千穂峡ボート助手</span>
+            <span>🛶 高千穂峡ボート 搶位助手</span>
           </div>
           <button type="button" class="th-toggle-btn" id="thToggleBtn">−</button>
         </div>
@@ -303,12 +306,12 @@
             <span class="th-info-val" id="hudTargetText">讀取中...</span>
           </div>
           <div class="th-info-row">
-            <span class="th-info-label">人數設定</span>
-            <span class="th-info-val" id="hudPassengerText">-</span>
+            <span class="th-info-label">搶位發動時間</span>
+            <span class="th-info-val" id="hudLaunchTimeText" style="color: #dc2626;">-</span>
           </div>
           <div class="th-info-row">
-            <span class="th-info-label">時段代碼 (Session CD)</span>
-            <span class="th-info-val" id="hudSessionCd" style="font-size: 10px; font-family: monospace;">-</span>
+            <span class="th-info-label">Session 代碼</span>
+            <span class="th-info-val" id="hudSessionCd" style="font-family: monospace;">-</span>
           </div>
 
           <div class="th-clock" id="hudClock">00:00:00.000</div>
@@ -319,15 +322,12 @@
           </div>
 
           <div class="th-actions">
-            <button type="button" class="th-btn th-btn-primary" id="btnManualHold">⚡ 一鍵立即搶位 (Hold Slot)</button>
-            <button type="button" class="th-btn th-btn-secondary" id="btnManualFill">✍️ 一鍵填表</button>
+            <button type="button" class="th-btn th-btn-primary" id="btnManualHold">⚡ 一鍵立即搶位 (波浪連發鎖位)</button>
             <button type="button" class="th-btn th-btn-secondary" id="btnTestChime">🔊 測試音效</button>
           </div>
 
-          <div class="th-copy-bar">
-            <button type="button" class="th-btn-fastcopy" id="btnCopyCard">📋 複製卡號</button>
-            <button type="button" class="th-btn-fastcopy" id="btnCopyExp">📋 複製到期日</button>
-            <button type="button" class="th-btn-fastcopy" id="btnCopyCvc">📋 複製 CVC</button>
+          <div class="th-memo-box" id="hudMemoBox">
+            💡 <strong>戰略核心</strong>：鎖定席位後有 <strong>15 分鐘</strong> 充裕時間，請在畫面上從容手動填寫資料完成預約。
           </div>
         </div>
       </div>
@@ -353,37 +353,11 @@
     });
 
     document.getElementById('btnManualHold').addEventListener('click', () => {
-      triggerHoldSlot(true);
-    });
-
-    document.getElementById('btnManualFill').addEventListener('click', () => {
-      fillReservationForm();
+      startBurstHold(true);
     });
 
     document.getElementById('btnTestChime').addEventListener('click', () => {
       playSuccessChime();
-    });
-
-    // Fast copy buttons for PayJP iframe bypass
-    document.getElementById('btnCopyCard').addEventListener('click', () => {
-      if (config && config.cardNumber) {
-        navigator.clipboard.writeText(config.cardNumber);
-        updateStatus('working', '📋 卡號已複製至剪貼簿！');
-      }
-    });
-
-    document.getElementById('btnCopyExp').addEventListener('click', () => {
-      if (config && config.expMonth && config.expYear) {
-        navigator.clipboard.writeText(`${config.expMonth}/${config.expYear}`);
-        updateStatus('working', '📋 到期日已複製 (MM/YY)！');
-      }
-    });
-
-    document.getElementById('btnCopyCvc').addEventListener('click', () => {
-      if (config && config.cvc) {
-        navigator.clipboard.writeText(config.cvc);
-        updateStatus('working', '📋 CVC 安全碼已複製！');
-      }
     });
 
     updateHUDDisplay();
@@ -393,17 +367,17 @@
   function updateHUDDisplay() {
     if (!config) return;
     const targetTextEl = document.getElementById('hudTargetText');
-    const passTextEl = document.getElementById('hudPassengerText');
+    const launchTextEl = document.getElementById('hudLaunchTimeText');
     const sessionCdEl = document.getElementById('hudSessionCd');
 
     if (targetTextEl) {
       targetTextEl.textContent = `${config.targetDate} ${config.targetTime.slice(0, 5)}`;
     }
-    if (passTextEl) {
-      passTextEl.textContent = `${config.adultCount} 大人, ${config.childCount} 幼兒`;
+    if (launchTextEl) {
+      launchTextEl.textContent = `${config.launchTime || '07:59:59.400'} (提前 ${config.earlyBufferMs || 600}ms)`;
     }
     if (sessionCdEl) {
-      sessionCdEl.textContent = resolvedSessionCd ? `${resolvedSessionCd.slice(0, 13)}...` : '尋找中...';
+      sessionCdEl.textContent = resolvedSessionCd ? `${resolvedSessionCd.slice(0, 13)}...` : '解析中...';
       sessionCdEl.title = resolvedSessionCd;
     }
   }
@@ -419,6 +393,7 @@
     text.textContent = message;
 
     if (type === 'waiting') icon.textContent = '⏳';
+    else if (type === 'burst') icon.textContent = '🔥';
     else if (type === 'working') icon.textContent = '🚀';
     else if (type === 'alert') icon.textContent = '🚨';
     else icon.textContent = '🎉';
@@ -430,7 +405,7 @@
 
     countdownTimer = setInterval(() => {
       const now = new Date();
-      const pad = (n) => String(n).padStart(2, '0');
+      const pad = (n, len = 2) => String(n).padStart(len, '0');
       const ms = String(now.getMilliseconds()).padStart(3, '0');
       const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${ms}`;
 
@@ -439,12 +414,12 @@
         clockEl.textContent = timeStr;
       }
 
-      // Check Launch Trigger (Taiwan time / Local time: e.g. 07:59:59.500)
-      if (config && config.autoHold && !isHolding && !window.location.pathname.includes('/orders/add')) {
-        const targetLaunchStr = config.launchTime || '07:59:59.500';
-        if (timeStr >= targetLaunchStr && timeStr <= '08:00:15.000') {
-          console.log('[TakachihoHelper] 達到預約開賣啟動時間！立即執行自動搶位 (hold_slot)...');
-          triggerHoldSlot(false);
+      // Check Launch Trigger (Taiwan time / Local time: e.g. 07:59:59.400)
+      if (config && config.autoHold && !isBursting && !slotLocked && !window.location.pathname.includes('/orders/add')) {
+        const targetLaunchStr = config.launchTime || '07:59:59.400';
+        if (timeStr >= targetLaunchStr && timeStr <= '08:00:10.000') {
+          console.log('[TakachihoHelper] 達到預定發動時間！立即啟動波浪密集搶位 (Burst Hold)...');
+          startBurstHold(false);
         }
       }
     }, 20);
@@ -454,7 +429,18 @@
   async function resolveSessionCd() {
     if (!config) return;
 
-    // 1. Try scanning DOM calendar items
+    // 1. Scan DOM for event button (order_with_statement) or calendar items
+    const statementBtn = document.querySelector('button.order_with_statement, button[data-service_session_cd]');
+    if (statementBtn) {
+      const sCd = statementBtn.getAttribute('data-service_session_cd');
+      if (sCd) {
+        resolvedSessionCd = sCd;
+        console.log('[TakachihoHelper] 從「予約手続き」按鈕取得 Session CD:', resolvedSessionCd);
+        updateHUDDisplay();
+        return resolvedSessionCd;
+      }
+    }
+
     const startTarget = `${config.targetDate} ${config.targetTime}`;
     const domInputs = document.querySelectorAll('.service_unit_service_start_datetime');
     for (const inp of domInputs) {
@@ -464,7 +450,7 @@
           const sInp = container.querySelector('.service_unit_service_session_cd');
           if (sInp && sInp.value) {
             resolvedSessionCd = sInp.value;
-            console.log('[TakachihoHelper] 從 DOM 找到時段 Session CD:', resolvedSessionCd);
+            console.log('[TakachihoHelper] 從日曆 DOM 找到時段 Session CD:', resolvedSessionCd);
             updateHUDDisplay();
             return resolvedSessionCd;
           }
@@ -472,14 +458,13 @@
       }
     }
 
-    // 2. Query eventCalendars/search API directly with browser cookies
+    // 2. Query eventCalendars/search API directly
     try {
-      // Calculate target date and next day
       const parts = config.targetDate.split('/');
       const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
       const nextD = new Date(d);
       nextD.setDate(d.getDate() + 1);
-      const pad = (n) => String(n).padStart(2, '0');
+      const pad = (n, len = 2) => String(n).padStart(len, '0');
       const nextDateStr = `${nextD.getFullYear()}/${pad(nextD.getMonth() + 1)}/${pad(nextD.getDate())}`;
 
       const formData = new URLSearchParams();
@@ -513,7 +498,6 @@
             return resolvedSessionCd;
           }
         }
-        // If exact target time not matched, fallback to first available session_cd
         if (results.length > 0 && !resolvedSessionCd) {
           resolvedSessionCd = results[0].service_session_cd || results[0].session_cd;
           console.log('[TakachihoHelper] 採用日曆相近時段 Session CD:', resolvedSessionCd);
@@ -527,22 +511,8 @@
     return resolvedSessionCd;
   }
 
-  // Execute hold_slot
-  async function triggerHoldSlot(isManual = false) {
-    if (isHolding) return;
-    isHolding = true;
-
-    if (!resolvedSessionCd) {
-      updateStatus('working', '🔍 正在解析時段代碼...');
-      await resolveSessionCd();
-    }
-
-    const sessionCd = resolvedSessionCd || '68a914a3-4d0c-4b20-88e0-9dd8c0a8018d';
-    const startDt = `${config.targetDate} ${config.targetTime}`;
-    const endDt = getEndDatetime(startDt);
-
-    updateStatus('working', `🚀 正在鎖定席位 (第 ${retryCount + 1} 次)...`);
-
+  // Single Hold Slot Request
+  async function sendHoldSlotRequest(sessionCd, startDt, endDt) {
     try {
       const formData = new URLSearchParams();
       formData.append('data[service_cd]', SERVICE_CD);
@@ -560,42 +530,80 @@
       });
 
       const json = await resp.json();
-      console.log('[TakachihoHelper] hold_slot 回應:', json);
+      return json;
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
+  // 🔥 波浪密集鎖位核心 (Burst Hold Mode - 每 100ms 重送，直到成功鎖定席位)
+  async function startBurstHold(isManual = false) {
+    if (isBursting || slotLocked) return;
+    isBursting = true;
+    burstAttempts = 0;
+
+    if (!resolvedSessionCd) {
+      await resolveSessionCd();
+    }
+
+    const sessionCd = resolvedSessionCd || '68a914a3-4d0c-4b20-88e0-9dd8c0a8018d';
+    const startDt = `${config.targetDate} ${config.targetTime}`;
+    const endDt = getEndDatetime(startDt);
+
+    updateStatus('burst', '🔥 暴風搶位中 (100ms 連發)...');
+
+    // 雙軌防護：若頁面出現「予約手続き」按鈕，同步秒速點擊
+    const checkAndClickBtn = () => {
+      const btn = document.querySelector('button.order_with_statement');
+      if (btn && btn.offsetParent !== null) {
+        console.log('[TakachihoHelper] 發現「予約手続き」按鈕！立即點擊！');
+        btn.click();
+      }
+    };
+
+    const doHoldTick = async () => {
+      if (slotLocked) return;
+
+      burstAttempts++;
+      checkAndClickBtn();
+
+      updateStatus('burst', `🔥 搶位重送中 (第 ${burstAttempts} 發)...`);
+
+      const json = await sendHoldSlotRequest(sessionCd, startDt, endDt);
+      console.log(`[TakachihoHelper][第 ${burstAttempts} 發] 回應:`, json);
 
       if (json && json.data && String(json.data.result) === '1') {
-        // SUCCESS!
+        // 🎉 席位鎖定成功！
+        slotLocked = true;
+        isBursting = false;
+        if (burstInterval) clearInterval(burstInterval);
+
         playSuccessChime();
-        updateStatus('success', '🎉 席位鎖定成功！保留 15 分鐘！');
+        updateStatus('success', '🎉 席位鎖定成功！獲得 15 分鐘保留期！');
         showModalSuccessNotification();
 
-        // Redirect directly to orders/add with held session cookies
+        // 立即以同 Session 跳轉到預約頁面
         setTimeout(() => {
           const orderUrl = `/takachiho1/orders/add?service_cd=${encodeURIComponent(SERVICE_CD)}&service_session_cd=${encodeURIComponent(sessionCd)}&service_start_datetime=${encodeURIComponent(startDt)}&service_end_datetime=${encodeURIComponent(endDt)}`;
           window.location.href = orderUrl;
-        }, 800);
+        }, 500);
         return;
       }
 
-      // If result == 0 (not open yet or full)
-      const msg = (json && json.message && json.message[0]) || '尚未開放或席位已滿';
-      retryCount++;
-
-      if (retryCount < MAX_RETRIES && (!isManual || retryCount < 5)) {
-        updateStatus('working', `⏳ ${msg} (重試中 ${retryCount}/${MAX_RETRIES})...`);
-        setTimeout(() => {
-          isHolding = false;
-          triggerHoldSlot(isManual);
-        }, 250);
-      } else {
-        updateStatus('waiting', `⚠️ ${msg} (已停止重試)`);
-        isHolding = false;
-        retryCount = 0;
+      // If full or exceeded max retries
+      if (burstAttempts >= MAX_BURST_ATTEMPTS) {
+        isBursting = false;
+        if (burstInterval) clearInterval(burstInterval);
+        const msg = (json && json.message && json.message[0]) || '已達到重試上限或已額滿';
+        updateStatus('waiting', `⚠️ ${msg}`);
       }
-    } catch (e) {
-      console.error('[TakachihoHelper] hold_slot 請求異常:', e);
-      updateStatus('waiting', `連線異常: ${e.message}`);
-      isHolding = false;
-    }
+    };
+
+    // First shot immediately
+    doHoldTick();
+
+    // Subsequent shots every 100ms
+    burstInterval = setInterval(doHoldTick, 100);
   }
 
   // Giant Celebration Modal on Slot Hold Success
@@ -604,7 +612,7 @@
     modal.style.cssText = `
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.75);
+      background: rgba(0, 0, 0, 0.85);
       z-index: 10000000;
       display: flex;
       align-items: center;
@@ -612,191 +620,25 @@
       font-family: sans-serif;
     `;
     modal.innerHTML = `
-      <div style="background: #fff; padding: 30px; border-radius: 12px; text-align: center; max-width: 450px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);">
-        <h2 style="font-size: 26px; color: #16a34a; margin-bottom: 12px;">🎉 席位鎖定成功！</h2>
-        <p style="font-size: 16px; color: #334155; margin-bottom: 16px;">
-          已為您成功暫時保留 <strong>15 分鐘</strong>！<br>正在立即進入預約填表頁面 (orders/add)...
+      <div style="background: #fff; padding: 32px; border-radius: 14px; text-align: center; max-width: 480px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.6);">
+        <h2 style="font-size: 28px; color: #16a34a; margin-bottom: 14px;">🎉 席位鎖定成功！</h2>
+        <p style="font-size: 17px; color: #1e293b; margin-bottom: 16px; line-height: 1.5; font-weight: 600;">
+          已成功搶下時段！享有 <span style="color: #dc2626;">15 分鐘獨占保留期 (仮押さえ)</span>！<br>
+          正在進入預約輸入頁面...
         </p>
-        <div style="font-size: 13px; color: #64748b;">
-          系統將自動填入代表者與信用卡付款資訊，請準備隨後輸入銀行 3D 簡訊驗證碼！
+        <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; font-size: 13px; color: #475569; line-height: 1.6; text-align: left;">
+          ✅ <strong>這 15 分鐘內其他人無法搶走這艘船！</strong><br>
+          ✅ 請在畫面上從容手動填寫代表者姓名、電話、地址與信用卡資料。<br>
+          ✅ 進入發卡銀行 3D 簡訊驗證頁面時，小幫手會自動發出警報聲提醒您輸入 OTP！
         </div>
       </div>
     `;
     document.body.appendChild(modal);
   }
 
-  // Helper: Trigger input events on form controls
-  function setVal(elem, value) {
-    if (!elem) return;
-    elem.value = value;
-    elem.dispatchEvent(new Event('input', { bubbles: true }));
-    elem.dispatchEvent(new Event('change', { bubbles: true }));
-    elem.dispatchEvent(new Event('blur', { bubbles: true }));
-  }
-
-  // Helper: Select option by value or text
-  function setSelect(elem, value) {
-    if (!elem) return;
-    let found = false;
-    for (let i = 0; i < elem.options.length; i++) {
-      if (elem.options[i].value === String(value) || elem.options[i].text.includes(String(value))) {
-        elem.selectedIndex = i;
-        found = true;
-        break;
-      }
-    }
-    if (!found) elem.value = value;
-    elem.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-
-  // Autofill Reservation Form on /orders/add
-  function fillReservationForm() {
-    if (!config) return { success: false, message: '尚未載入設定' };
-
-    console.log('[TakachihoHelper] 開始執行預約表單自動填寫...');
-    updateStatus('working', '✍️ 正在自動填入表單與信用卡...');
-
-    // 1. If guest order dialog is visible, click "会員登録せずに予約"
-    const guestBtn = document.querySelector('.no_auth_order_btn_cls');
-    if (guestBtn && guestBtn.offsetParent !== null) {
-      console.log('[TakachihoHelper] 點擊非會員預約按鈕 (会員登録せずに予約)...');
-      guestBtn.click();
-    }
-
-    let filledCount = 0;
-
-    // 2. Customer fields
-    // Last Name (漢字 / 護照英文)
-    const lNameInp = document.querySelector('input[name="data[Customer][l_name]"], input[data-field_name="Customer.l_name"]');
-    if (lNameInp && config.lName) { setVal(lNameInp, config.lName); filledCount++; }
-
-    // First Name (漢字 / 護照英文)
-    const fNameInp = document.querySelector('input[name="data[Customer][f_name]"], input[data-field_name="Customer.f_name"]');
-    if (fNameInp && config.fName) { setVal(fNameInp, config.fName); filledCount++; }
-
-    // Last Name Kana (片假名)
-    const lKanaInp = document.querySelector('input[name="data[Customer][l_name_kana]"], input[data-field_name="Customer.l_name_kana"]');
-    if (lKanaInp && config.lNameKana) { setVal(lKanaInp, config.lNameKana); filledCount++; }
-
-    // First Name Kana (片假名)
-    const fKanaInp = document.querySelector('input[name="data[Customer][f_name_kana]"], input[data-field_name="Customer.f_name_kana"]');
-    if (fKanaInp && config.fNameKana) { setVal(fKanaInp, config.fNameKana); filledCount++; }
-
-    // Mail & Mail Confirm
-    const mailInp = document.querySelector('input[name="data[Customer][mail]"], input[data-field_name="Customer.mail"]');
-    if (mailInp && config.email) { setVal(mailInp, config.email); filledCount++; }
-
-    const mailConfirmInp = document.querySelector('input[name="data[Customer][mail_confirm]"], input[data-field_name="Customer.mail_confirm"]');
-    if (mailConfirmInp && config.email) { setVal(mailConfirmInp, config.email); filledCount++; }
-
-    // Phone / Tel
-    const telInp = document.querySelector('input[name="data[Customer][tel]"], input[data-field_name="Customer.tel"]');
-    if (telInp && config.tel) { setVal(telInp, config.tel); filledCount++; }
-
-    // Postal Code / Zip
-    const zipInp = document.querySelector('input[name="data[Customer][zip]"], input[data-field_name="Customer.zip"]');
-    if (zipInp && config.zip) { setVal(zipInp, config.zip); filledCount++; }
-
-    // Address
-    const addrInp = document.querySelector('input[name="data[Customer][address]"], input[data-field_name="Customer.address"]');
-    if (addrInp && config.address) { setVal(addrInp, config.address); filledCount++; }
-
-    // Birthday
-    const bdayInp = document.querySelector('input[name="data[Customer][birthday]"], input[data-field_name="Customer.birthday"]');
-    if (bdayInp && config.birthday) { setVal(bdayInp, config.birthday); filledCount++; }
-
-    // If birthday has separate year/month/day selects
-    if (config.birthday && config.birthday.includes('/')) {
-      const bParts = config.birthday.split('/');
-      const bYear = document.querySelector('select[name*="birthday"][name*="year"]');
-      const bMonth = document.querySelector('select[name*="birthday"][name*="month"]');
-      const bDay = document.querySelector('select[name*="birthday"][name*="day"]');
-      if (bYear) setSelect(bYear, bParts[0]);
-      if (bMonth) setSelect(bMonth, bParts[1]);
-      if (bDay) setSelect(bDay, bParts[2]);
-    }
-
-    // 3. Passenger Counts
-    const adultSel = document.querySelector('select[name="data[OrderDetail][adult_count]"], select[data-field_name="OrderDetail.adult_count"], select[name*="adult"]');
-    if (adultSel && config.adultCount) { setSelect(adultSel, config.adultCount); filledCount++; }
-
-    const childSel = document.querySelector('select[name="data[OrderDetail][child_count]"], select[data-field_name="OrderDetail.child_count"], select[name*="child"]');
-    if (childSel && config.childCount !== undefined) { setSelect(childSel, config.childCount); filledCount++; }
-
-    // 4. Terms and Agreement Checkboxes
-    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-    checkboxes.forEach((cb) => {
-      const name = (cb.name || cb.id || cb.className || '').toLowerCase();
-      const parentText = (cb.closest('label, div') ? cb.closest('label, div').innerText : '').toLowerCase();
-      if (name.includes('agree') || name.includes('kiyaku') || name.includes('term') ||
-          parentText.includes('同意') || parentText.includes('規約') || parentText.includes('承諾')) {
-        cb.checked = true;
-        cb.dispatchEvent(new Event('change', { bubbles: true }));
-        filledCount++;
-      }
-    });
-
-    // 5. Credit Card Fields (PayJP / Card Inputs)
-    const cardNumInp = document.querySelector('#payjp_number, input[name*="card_number"], input[name*="card_no"], input[data-field_name*="card_number"]');
-    if (cardNumInp && config.cardNumber) { setVal(cardNumInp, config.cardNumber); filledCount++; }
-
-    const expMonthInp = document.querySelector('#payjp_exp_month, select[name*="exp_month"], input[name*="exp_month"]');
-    if (expMonthInp && config.expMonth) {
-      if (expMonthInp.tagName.toLowerCase() === 'select') setSelect(expMonthInp, config.expMonth);
-      else setVal(expMonthInp, config.expMonth);
-      filledCount++;
-    }
-
-    const expYearInp = document.querySelector('#payjp_exp_year, select[name*="exp_year"], input[name*="exp_year"]');
-    if (expYearInp && config.expYear) {
-      if (expYearInp.tagName.toLowerCase() === 'select') setSelect(expYearInp, config.expYear);
-      else setVal(expYearInp, config.expYear);
-      filledCount++;
-    }
-
-    const cvcInp = document.querySelector('#payjp_cvc, input[name*="cvc"], input[name*="security_code"]');
-    if (cvcInp && config.cvc) { setVal(cvcInp, config.cvc); filledCount++; }
-
-    const holderInp = document.querySelector('#payjp_name, input[name*="holder"], input[name*="card_name"]');
-    if (holderInp && config.cardHolder) { setVal(holderInp, config.cardHolder); filledCount++; }
-
-    console.log(`[TakachihoHelper] 表單填寫完畢，共填入/勾選 ${filledCount} 個欄位！`);
-    updateStatus('success', `🎉 已填入 ${filledCount} 個欄位！`);
-
-    // 6. Auto-Submit if enabled
-    if (config.autoSubmit) {
-      handleAutoSubmit();
-    }
-
-    return { success: filledCount > 0, message: `已成功填入 ${filledCount} 個欄位` };
-  }
-
-  // Handle Automatic Form Submission
-  function handleAutoSubmit() {
-    // Look for submit or next step buttons
-    const submitBtn = document.querySelector(
-      '#mainForm button[type="submit"], input[type="submit"], .front_btn.color_config, button.order_confirm_btn'
-    );
-
-    if (!submitBtn) {
-      console.log('[TakachihoHelper] 未找到明確的送出按鈕，保留畫面讓使用者手動點擊');
-      return;
-    }
-
-    // Countdown 1.2s before clicking so user can cancel if desired
-    let countdownSec = 1;
-    updateStatus('working', `🚀 即將自動前往確認頁面 (${countdownSec}s)...`);
-
-    setTimeout(() => {
-      console.log('[TakachihoHelper] 自動點擊送出確認按鈕:', submitBtn);
-      submitBtn.click();
-    }, 1200);
-  }
-
   // 3D Secure / OTP Verification Detector
   function checkOtpVerificationPage() {
     const url = window.location.href.toLowerCase();
-    const title = document.title.toLowerCase();
     const bodyText = document.body ? document.body.innerText : '';
 
     const isOtp =
@@ -816,13 +658,11 @@
       console.log('[TakachihoHelper] 🚨 偵測到 3D 驗證頁面已啟動！');
       updateStatus('alert', '🚨 請輸入銀行簡訊驗證碼 (OTP)！');
 
-      // Trigger continuous audio alert
       playOtpAlertSound();
       if (!alarmInterval) {
         alarmInterval = setInterval(playOtpAlertSound, 3500);
       }
 
-      // Add high-visibility top notification bar if not present
       if (!document.getElementById('takachiho-otp-banner')) {
         const banner = document.createElement('div');
         banner.id = 'takachiho-otp-banner';
@@ -832,9 +672,9 @@
           padding: 14px 20px; font-size: 16px; font-weight: 800;
           text-align: center; z-index: 10000001;
           box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
-          animation: th-pulse 0.8s infinite alternate;
+          animation: th-burst-pulse 0.8s infinite alternate;
         `;
-        banner.innerHTML = `🔔 請立即在畫面上輸入銀行簡訊驗證碼 (OTP) 完成預約！`;
+        banner.innerHTML = `🔔 3D 驗證頁面已就緒！請立即輸入手機簡訊驗證碼 (OTP) 完成預約！`;
         document.body.prepend(banner);
       }
     } else {
@@ -851,9 +691,6 @@
       config = request.profile;
       updateHUDDisplay();
       sendResponse({ success: true });
-    } else if (request.action === 'TRIGGER_AUTOFILL') {
-      const res = fillReservationForm();
-      sendResponse(res);
     }
     return true;
   });
@@ -864,25 +701,44 @@
     createHUD();
     startClock();
 
-    // Check if on calendar page
-    if (window.location.pathname.includes('/eventCalendars')) {
+    // 1. If on calendar or event detail page, resolve Session CD ahead of time
+    if (window.location.pathname.includes('/eventCalendars') || window.location.pathname.includes('/events/view')) {
       resolveSessionCd();
+
+      // Monitor for "予約手続き" button appearance
+      const btnObserver = new MutationObserver(() => {
+        if (config && config.autoClickStatement && !slotLocked) {
+          const btn = document.querySelector('button.order_with_statement');
+          if (btn && btn.offsetParent !== null) {
+            console.log('[TakachihoHelper] 監控偵測到「予約手続き」按鈕出現！立即毫秒自動點擊！');
+            btn.click();
+          }
+        }
+      });
+      btnObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
     }
 
-    // Check if on orders/add page
+    // 2. If already on orders/add page, show peaceful 15-minute countdown indicator
     if (window.location.pathname.includes('/orders/add')) {
-      updateStatus('working', '📋 進入預約表單頁面...');
-      if (config.autoFill) {
-        setTimeout(fillReservationForm, 500);
-      }
+      updateStatus('success', '🎯 席位已鎖定！擁有 15 分鐘保留期');
+      playSuccessChime();
+
+      // Top banner assuring the user
+      const topBanner = document.createElement('div');
+      topBanner.style.cssText = `
+        background: #dcfce7; border-bottom: 2px solid #86efac; color: #166534;
+        padding: 10px 16px; font-weight: 700; font-size: 14px; text-align: center;
+      `;
+      topBanner.innerHTML = `🎉 恭喜！席位已為您鎖定保留 15 分鐘（剩餘時間見下方計時）！請在下方從容填妥代表者與信用卡資料即可。`;
+      document.body.prepend(topBanner);
     }
 
-    // Check 3D Secure Verification periodically & on DOM updates
+    // 3. 3D Secure Verification Poller
     checkOtpVerificationPage();
-    const observer = new MutationObserver(() => {
+    const otpObserver = new MutationObserver(() => {
       checkOtpVerificationPage();
     });
-    observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    otpObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
   }
 
   if (document.readyState === 'loading') {
