@@ -292,7 +292,7 @@
     
     <div class="form-group">
       <label for="targetUrl" class="required">目標預約連結 (活動頁或日曆頁)</label>
-      <input type="text" id="targetUrl" placeholder="https://eipro.jp/takachiho1/eventCalendars/index">
+      <input type="text" id="targetUrl" value="https://eipro.jp/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a916a6-59c8-459d-9643-a231c0a8018d&service_start_datetime=2026/11/07%2008:30:00&service_end_datetime=2026/11/07%2009:00:00" placeholder="https://eipro.jp/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a916a6-59c8-459d-9643-a231c0a8018d&service_start_datetime=2026/11/07%2008:30:00&service_end_datetime=2026/11/07%2009:00:00">
       <div class="url-actions">
         <button type="button" class="btn-xs" id="btnUseCurrentUrl">📍 抓取當前分頁網址</button>
         <button type="button" class="btn-xs" id="btnGoTargetUrl">🌐 開啟此目標網址</button>
@@ -349,7 +349,7 @@
 
   <!-- 2. 極速波浪搶位設定 (核心引擎) -->
   <div class="card">
-    <div class="card-title">⚡ 搶位時機與波浪連發設定</div>
+    <div class="card-title">⚡ 搶位時機與安全重試設定</div>
 
     <div class="form-row">
       <div class="form-group" style="flex: 1.2;">
@@ -359,18 +359,18 @@
       <div class="form-group" style="flex: 1.5;">
         <label for="earlyBufferMs" class="required">提前發送時間 (精準抵達)</label>
         <select id="earlyBufferMs">
-          <option value="20" selected>提前 20 毫秒 (07:59:59.980 - 🎯 抵達剛好 08:00:00)</option>
+          <option value="15" selected>提前 15 毫秒 (07:59:59.985 - 🎯 推薦！抵達 08:00:00.005)</option>
+          <option value="20">提前 20 毫秒 (07:59:59.980 - 抵達約 08:00:00.000)</option>
           <option value="30">提前 30 毫秒 (07:59:59.970)</option>
           <option value="50">提前 50 毫秒 (07:59:59.950)</option>
           <option value="100">提前 100 毫秒 (07:59:59.900)</option>
           <option value="200">提前 200 毫秒 (07:59:59.800)</option>
-          <option value="500">提前 500 毫秒 (07:59:59.500)</option>
         </select>
       </div>
     </div>
 
     <div class="trigger-preview" id="triggerPreview">
-      🎯 首發發動時間：07:59:59.980（剛好於 08:00:00.000 抵達伺服器，若未開則以 250ms 溫和重送）
+      🎯 首發發動時間：07:59:59.985（於 08:00:00.005 抵達伺服器，若未開則以 250ms 溫和重送）
     </div>
 
     <label class="checkbox-group">

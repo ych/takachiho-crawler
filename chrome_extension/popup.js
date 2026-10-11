@@ -3,11 +3,11 @@
 const STORAGE_KEY = 'takachiho_booking_profile';
 
 const DEFAULT_SETTINGS = {
-  targetUrl: 'https://eipro.jp/takachiho1/eventCalendars/index',
+  targetUrl: 'https://eipro.jp/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a916a6-59c8-459d-9643-a231c0a8018d&service_start_datetime=2026/11/07%2008:30:00&service_end_datetime=2026/11/07%2009:00:00',
   targetDate: '2026/11/07',
   targetTime: '08:30:00',
   launchBaseTime: '08:00:00',
-  earlyBufferMs: '20', // 提前 20ms (07:59:59.980 - 剛好抵達 08:00:00.000)
+  earlyBufferMs: '15', // 提前 15ms (07:59:59.985 - 預計於 08:00:00.005 抵達伺服器)
   adultCount: '2',
   childCount: '0',
   autoHold: true,
@@ -67,7 +67,7 @@ function calculateTriggerTime(baseTimeStr, bufferMs) {
     const pad = (n, len = 2) => String(n).padStart(len, '0');
     return `${pad(resH)}:${pad(resM)}:${pad(resS)}.${pad(resMs, 3)}`;
   } catch (e) {
-    return '07:59:59.980';
+    return '07:59:59.985';
   }
 }
 

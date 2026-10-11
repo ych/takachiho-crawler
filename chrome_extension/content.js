@@ -103,12 +103,12 @@
     return new Promise((resolve) => {
       chrome.storage.local.get([STORAGE_KEY], (res) => {
         config = res[STORAGE_KEY] || {
-          targetUrl: 'https://eipro.jp/takachiho1/eventCalendars/index',
+          targetUrl: 'https://eipro.jp/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a916a6-59c8-459d-9643-a231c0a8018d&service_start_datetime=2026/11/07%2008:30:00&service_end_datetime=2026/11/07%2009:00:00',
           targetDate: '2026/11/07',
           targetTime: '08:30:00',
           launchBaseTime: '08:00:00',
-          earlyBufferMs: '20',
-          launchTime: '07:59:59.980',
+          earlyBufferMs: '15',
+          launchTime: '07:59:59.985',
           adultCount: '2',
           childCount: '0',
           autoHold: true,
@@ -374,7 +374,7 @@
       targetTextEl.textContent = `${config.targetDate} ${config.targetTime.slice(0, 5)}`;
     }
     if (launchTextEl) {
-      launchTextEl.textContent = `${config.launchTime || '07:59:59.400'} (提前 ${config.earlyBufferMs || 600}ms)`;
+      launchTextEl.textContent = `${config.launchTime || '07:59:59.985'} (提前 ${config.earlyBufferMs || 15}ms)`;
     }
     if (sessionCdEl) {
       sessionCdEl.textContent = resolvedSessionCd ? `${resolvedSessionCd.slice(0, 13)}...` : '解析中...';
@@ -414,11 +414,11 @@
         clockEl.textContent = timeStr;
       }
 
-      // Check Launch Trigger (Taiwan time / Local time: e.g. 07:59:59.400)
+      // Check Launch Trigger (Taiwan time / Local time: e.g. 07:59:59.985)
       if (config && config.autoHold && !isBursting && !slotLocked && !window.location.pathname.includes('/orders/add')) {
-        const targetLaunchStr = config.launchTime || '07:59:59.400';
+        const targetLaunchStr = config.launchTime || '07:59:59.985';
         if (timeStr >= targetLaunchStr && timeStr <= '08:00:10.000') {
-          console.log('[TakachihoHelper] 達到預定發動時間！立即啟動波浪密集搶位 (Burst Hold)...');
+          console.log('[TakachihoHelper] 達到預定發動時間！立即啟動精準鎖位 (Burst Hold)...');
           startBurstHold(false);
         }
       }
@@ -428,6 +428,32 @@
   // Resolve Session CD for Target Date & Time
   async function resolveSessionCd() {
     if (!config) return;
+
+    // 0. Priority: Extract directly from current page URL query parameters
+    try {
+      const currentUrlParams = new URLSearchParams(window.location.search);
+      const urlSessionCd = currentUrlParams.get('service_session_cd');
+      if (urlSessionCd) {
+        resolvedSessionCd = urlSessionCd;
+        console.log('[TakachihoHelper] 從當前網址參數直接解析 Session CD:', resolvedSessionCd);
+        updateHUDDisplay();
+        return resolvedSessionCd;
+      }
+    } catch (e) {}
+
+    // Priority 0.5: Extract from config.targetUrl if present
+    if (config.targetUrl && config.targetUrl.includes('service_session_cd=')) {
+      try {
+        const u = new URL(config.targetUrl);
+        const tSessionCd = u.searchParams.get('service_session_cd');
+        if (tSessionCd) {
+          resolvedSessionCd = tSessionCd;
+          console.log('[TakachihoHelper] 從目標網址設定直接解析 Session CD:', resolvedSessionCd);
+          updateHUDDisplay();
+          return resolvedSessionCd;
+        }
+      } catch (e) {}
+    }
 
     // 1. Scan DOM for event button (order_with_statement) or calendar items
     const statementBtn = document.querySelector('button.order_with_statement, button[data-service_session_cd]');
@@ -547,7 +573,7 @@
       await resolveSessionCd();
     }
 
-    const sessionCd = resolvedSessionCd || '68a914a3-4d0c-4b20-88e0-9dd8c0a8018d';
+    const sessionCd = resolvedSessionCd || '68a916a6-59c8-459d-9643-a231c0a8018d';
     const startDt = `${config.targetDate} ${config.targetTime}`;
     const endDt = getEndDatetime(startDt);
 
@@ -600,7 +626,7 @@
       }
     };
 
-    // First shot immediately (at 07:59:59.980, reaching server right at 08:00:00.000!)
+    // First shot immediately (at 07:59:59.985, reaching server right at 08:00:00.005!)
     doHoldTick();
 
     // Subsequent shots safely every 250ms (human-like rapid click, 0 risk of rate limit)
