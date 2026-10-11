@@ -26,6 +26,8 @@ const els = {
   targetUrl: document.getElementById('targetUrl'),
   btnUseCurrentUrl: document.getElementById('btnUseCurrentUrl'),
   btnGoTargetUrl: document.getElementById('btnGoTargetUrl'),
+  btnPreset1026: document.getElementById('btnPreset1026'),
+  btnPreset1107: document.getElementById('btnPreset1107'),
 
   targetDate: document.getElementById('targetDate'),
   targetTime: document.getElementById('targetTime'),
@@ -177,6 +179,28 @@ els.btnGoTargetUrl.addEventListener('click', () => {
     }
   });
 });
+
+// Presets for 10/26 simulation and 11/07 official
+const URL_1026 = 'https://eipro.jp/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a914cc-b08c-4413-94a1-9dd8c0a8018d&service_start_datetime=2026/10/26%2008:30:00&service_end_datetime=2026/10/26%2009:00:00';
+const URL_1107 = 'https://eipro.jp/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a916a6-59c8-459d-9643-a231c0a8018d&service_start_datetime=2026/11/07%2008:30:00&service_end_datetime=2026/11/07%2009:00:00';
+
+if (els.btnPreset1026) {
+  els.btnPreset1026.addEventListener('click', () => {
+    els.targetUrl.value = URL_1026;
+    els.targetDate.value = '2026/10/26';
+    els.targetTime.value = '08:30:00';
+    showStatus('🧪 已帶入 10/26 實測時段！請點「儲存搶位設定」');
+  });
+}
+
+if (els.btnPreset1107) {
+  els.btnPreset1107.addEventListener('click', () => {
+    els.targetUrl.value = URL_1107;
+    els.targetDate.value = '2026/11/07';
+    els.targetTime.value = '08:30:00';
+    showStatus('🎯 已帶入 11/07 正式時段！請點「儲存搶位設定」');
+  });
+}
 
 els.btnSave.addEventListener('click', saveSettings);
 

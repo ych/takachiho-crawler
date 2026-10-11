@@ -1,4 +1,5 @@
 // content.js - Takachiho Gorge Boat Slot-Locking Specialist (高千穂峡ボート 極速佔位助手)
+// 輕量、純淨、零卡頓架構：使用 Shadow DOM 隔離，杜絕 DOM 重繪迴圈與崩潰
 (function () {
   'use strict';
 
@@ -9,32 +10,114 @@
   let resolvedSessionCd = '';
   let isBursting = false;
   let slotLocked = false;
-  let burstInterval = null;
-  let burstAttempts = 0;
-  const MAX_BURST_ATTEMPTS = 60; // 最多連發 60 次 (約 6~7 秒)
-  let countdownTimer = null;
-  let audioCtx = null;
-  let alarmInterval = null;
+  let isStopped = false;
 
-  // Initialize Web Audio API
+  let countdownTimer = null;
+  let burstInterval = null;
+  let btnObserver = null;
+  let audioCtx = null;
+  let burstAttempts = 0;
+  const SAFE_MAX_ATTEMPTS = 12; // 最多連發 12 次 (約 3 秒，安全不被封鎖)
+
+  let hudHost = null;
+  let hudShadow = null;
+
+  // ==========================================
+  // 1. 資源釋放與生命週期控制 (Stop & Resume)
+  // ==========================================
+
+  function stopAllResources(logMessage = true) {
+    isStopped = true;
+    isBursting = false;
+
+    // 清除所有計時器
+    if (countdownTimer) {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+    if (burstInterval) {
+      clearInterval(burstInterval);
+      burstInterval = null;
+    }
+
+    // 斷開 DOM 監控
+    if (btnObserver) {
+      btnObserver.disconnect();
+      btnObserver = null;
+    }
+
+    // 關閉並釋放音訊資源
+    if (audioCtx) {
+      try {
+        audioCtx.close().catch(() => {});
+      } catch (e) {}
+      audioCtx = null;
+    }
+
+    updateStatus('stopped', '⏹️ 已停止所有排程，所有資源均已釋放');
+    updateStopButtonUI(true);
+
+    if (logMessage) {
+      console.log('[TakachihoHelper] 🛑 已手動停止搶位，所有 Timer、Observer、Audio 資源均已成功釋放！');
+    }
+  }
+
+  function resumeAllResources() {
+    isStopped = false;
+    updateStopButtonUI(false);
+    updateStatus('waiting', '🟢 重新啟動監控中...');
+
+    startClock();
+    startButtonObserver();
+    resolveSessionCd();
+
+    console.log('[TakachihoHelper] ▶️ 已重新啟動搶位監控！');
+  }
+
+  function updateStopButtonUI(isCurrentlyStopped) {
+    if (!hudShadow) return;
+    const btn = hudShadow.getElementById('btnToggleStop');
+    if (!btn) return;
+
+    if (isCurrentlyStopped) {
+      btn.textContent = '▶️ 重新啟動監控';
+      btn.className = 'th-btn th-btn-resume';
+    } else {
+      btn.textContent = '🛑 停止搶位並釋放資源';
+      btn.className = 'th-btn th-btn-stop';
+    }
+  }
+
+  // ==========================================
+  // 2. 音訊控制 (合規 Web Audio API，點擊後解鎖)
+  // ==========================================
+
   function getAudioContext() {
     if (!audioCtx) {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (AudioContextClass) {
-        audioCtx = new AudioContextClass();
+      try {
+        const AudioClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioClass) audioCtx = new AudioClass();
+      } catch (e) {
+        return null;
       }
-    }
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume().catch(() => {});
     }
     return audioCtx;
   }
 
-  // Play Triumphant Success Chime
   function playSuccessChime() {
     try {
       const ctx = getAudioContext();
       if (!ctx) return;
+      if (ctx.state === 'suspended') {
+        ctx.resume().then(() => doChime(ctx)).catch(() => {});
+        return;
+      }
+      doChime(ctx);
+    } catch (e) {}
+  }
+
+  function doChime(ctx) {
+    try {
       const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
       notes.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
@@ -48,90 +131,30 @@
         osc.start(ctx.currentTime + idx * 0.12);
         osc.stop(ctx.currentTime + idx * 0.12 + 0.36);
       });
-    } catch (e) {
-      console.warn('Audio play error:', e);
-    }
+    } catch (e) {}
   }
 
-  // Play Loud Alarm for 3D Secure OTP Verification
-  function playOtpAlertSound() {
-    try {
-      const ctx = getAudioContext();
-      if (!ctx) return;
-      const beeps = [880, 880, 1174.66]; // A5, A5, D6
-      beeps.forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.15);
-        gain.gain.setValueAtTime(0.3, ctx.currentTime + idx * 0.15);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.15 + 0.12);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(ctx.currentTime + idx * 0.15);
-        osc.stop(ctx.currentTime + idx * 0.15 + 0.13);
-      });
-    } catch (e) {
-      console.warn('Audio play error:', e);
-    }
-  }
+  // ==========================================
+  // 3. 浮動面板 (Shadow DOM 封裝，0 污染 0 迴圈)
+  // ==========================================
 
-  // Calculate End Datetime (add 30 minutes)
-  function getEndDatetime(startDatetimeStr) {
-    try {
-      const parts = startDatetimeStr.split(' ');
-      const dateParts = parts[0].split('/');
-      const timeParts = parts[1].split(':');
-      const d = new Date(
-        parseInt(dateParts[0], 10),
-        parseInt(dateParts[1], 10) - 1,
-        parseInt(dateParts[2], 10),
-        parseInt(timeParts[0], 10),
-        parseInt(timeParts[1], 10),
-        parseInt(timeParts[2], 10)
-      );
-      d.setMinutes(d.getMinutes() + 30);
-      const pad = (n, len = 2) => String(n).padStart(len, '0');
-      return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    } catch (e) {
-      return startDatetimeStr;
-    }
-  }
-
-  // Load Config from Chrome Storage
-  async function loadConfig() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get([STORAGE_KEY], (res) => {
-        config = res[STORAGE_KEY] || {
-          targetUrl: 'https://eipro.jp/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a916a6-59c8-459d-9643-a231c0a8018d&service_start_datetime=2026/11/07%2008:30:00&service_end_datetime=2026/11/07%2009:00:00',
-          targetDate: '2026/11/07',
-          targetTime: '08:30:00',
-          launchBaseTime: '08:00:00',
-          earlyBufferMs: '15',
-          launchTime: '07:59:59.985',
-          adultCount: '2',
-          childCount: '0',
-          autoHold: true,
-          autoClickStatement: true
-        };
-        resolve(config);
-      });
-    });
-  }
-
-  // Build Floating HUD Widget
   function createHUD() {
-    if (document.getElementById('takachiho-hud-root')) return;
+    if (document.getElementById('takachiho-hud-host')) return;
 
-    const hud = document.createElement('div');
-    hud.id = 'takachiho-hud-root';
-    hud.innerHTML = `
+    hudHost = document.createElement('div');
+    hudHost.id = 'takachiho-hud-host';
+    hudShadow = hudHost.attachShadow({ mode: 'open' });
+
+    hudShadow.innerHTML = `
       <style>
-        #takachiho-hud-root {
+        :host {
+          all: initial;
+        }
+        .th-container {
           position: fixed;
           top: 16px;
           right: 16px;
-          z-index: 9999999;
+          z-index: 2147483647;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           font-size: 13px;
           line-height: 1.4;
@@ -141,7 +164,6 @@
         .th-panel {
           width: 320px;
           background: rgba(255, 255, 255, 0.98);
-          backdrop-filter: blur(8px);
           border: 1px solid #0284c7;
           border-radius: 10px;
           overflow: hidden;
@@ -221,22 +243,11 @@
           background: #fee2e2;
           color: #b91c1c;
           border-color: #fca5a5;
-          animation: th-burst-pulse 0.4s infinite alternate;
         }
-        .th-status-badge.working {
-          background: #e0f2fe;
-          color: #0369a1;
-          border-color: #bae6fd;
-        }
-        .th-status-badge.alert {
-          background: #fee2e2;
-          color: #991b1b;
-          border-color: #fecaca;
-          animation: th-burst-pulse 1s infinite alternate;
-        }
-        @keyframes th-burst-pulse {
-          from { opacity: 0.85; transform: scale(1.0); }
-          to { opacity: 1; transform: scale(1.02); }
+        .th-status-badge.stopped {
+          background: #f1f5f9;
+          color: #475569;
+          border-color: #cbd5e1;
         }
         .th-clock {
           text-align: center;
@@ -266,7 +277,7 @@
           font-size: 12px;
           font-weight: 600;
           cursor: pointer;
-          transition: background 0.15s;
+          transition: background 0.15s, opacity 0.15s;
         }
         .th-btn-primary {
           background: #0284c7;
@@ -274,6 +285,20 @@
         }
         .th-btn-primary:hover {
           background: #0369a1;
+        }
+        .th-btn-stop {
+          background: #ef4444;
+          color: #fff;
+        }
+        .th-btn-stop:hover {
+          background: #dc2626;
+        }
+        .th-btn-resume {
+          background: #10b981;
+          color: #fff;
+        }
+        .th-btn-resume:hover {
+          background: #059669;
         }
         .th-btn-secondary {
           background: #f1f5f9;
@@ -293,52 +318,55 @@
           line-height: 1.4;
         }
       </style>
-      <div class="th-panel" id="thPanel">
-        <div class="th-header" id="thHeader">
-          <div class="th-header-title">
-            <span>🛶 高千穂峡ボート 搶位助手</span>
+      <div class="th-container">
+        <div class="th-panel" id="thPanel">
+          <div class="th-header" id="thHeader">
+            <div class="th-header-title">
+              <span>🛶 高千穂峡ボート 搶位助手</span>
+            </div>
+            <button type="button" class="th-toggle-btn" id="thToggleBtn">−</button>
           </div>
-          <button type="button" class="th-toggle-btn" id="thToggleBtn">−</button>
-        </div>
-        <div class="th-body">
-          <div class="th-info-row">
-            <span class="th-info-label">目標時段</span>
-            <span class="th-info-val" id="hudTargetText">讀取中...</span>
-          </div>
-          <div class="th-info-row">
-            <span class="th-info-label">搶位發動時間</span>
-            <span class="th-info-val" id="hudLaunchTimeText" style="color: #dc2626;">-</span>
-          </div>
-          <div class="th-info-row">
-            <span class="th-info-label">Session 代碼</span>
-            <span class="th-info-val" id="hudSessionCd" style="font-family: monospace;">-</span>
-          </div>
+          <div class="th-body">
+            <div class="th-info-row">
+              <span class="th-info-label">目標時段</span>
+              <span class="th-info-val" id="hudTargetText">讀取中...</span>
+            </div>
+            <div class="th-info-row">
+              <span class="th-info-label">搶位發動時間</span>
+              <span class="th-info-val" id="hudLaunchTimeText" style="color: #dc2626;">-</span>
+            </div>
+            <div class="th-info-row">
+              <span class="th-info-label">Session 代碼</span>
+              <span class="th-info-val" id="hudSessionCd" style="font-family: monospace;">-</span>
+            </div>
 
-          <div class="th-clock" id="hudClock">00:00:00.000</div>
+            <div class="th-clock" id="hudClock">00:00:00.000</div>
 
-          <div class="th-status-badge waiting" id="hudStatusBadge">
-            <span id="hudStatusIcon">🟢</span>
-            <span id="hudStatusText">待命中</span>
-          </div>
+            <div class="th-status-badge waiting" id="hudStatusBadge">
+              <span id="hudStatusIcon">🟢</span>
+              <span id="hudStatusText">待命中</span>
+            </div>
 
-          <div class="th-actions">
-            <button type="button" class="th-btn th-btn-primary" id="btnManualHold">⚡ 一鍵立即搶位 (波浪連發鎖位)</button>
-            <button type="button" class="th-btn th-btn-secondary" id="btnTestChime">🔊 測試音效</button>
-          </div>
+            <div class="th-actions">
+              <button type="button" class="th-btn th-btn-primary" id="btnManualHold">⚡ 一鍵立即搶位 (安全連發)</button>
+              <button type="button" class="th-btn th-btn-stop" id="btnToggleStop">🛑 停止搶位並釋放資源</button>
+              <button type="button" class="th-btn th-btn-secondary" id="btnTestChime">🔊 測試音效</button>
+            </div>
 
-          <div class="th-memo-box" id="hudMemoBox">
-            💡 <strong>戰略核心</strong>：鎖定席位後有 <strong>15 分鐘</strong> 充裕時間，請在畫面上從容手動填寫資料完成預約。
+            <div class="th-memo-box">
+              💡 <strong>唯一目標</strong>：全力鎖定席位 (15 分鐘獨占保留期)！預約資料請在畫面上從容手動填寫。
+            </div>
           </div>
         </div>
       </div>
     `;
 
-    document.body.appendChild(hud);
+    document.documentElement.appendChild(hudHost);
 
-    // Event handlers for HUD
-    const thPanel = document.getElementById('thPanel');
-    const thHeader = document.getElementById('thHeader');
-    const thToggleBtn = document.getElementById('thToggleBtn');
+    // 面板事件綁定
+    const thPanel = hudShadow.getElementById('thPanel');
+    const thHeader = hudShadow.getElementById('thHeader');
+    const thToggleBtn = hudShadow.getElementById('thToggleBtn');
 
     thHeader.addEventListener('click', (e) => {
       if (e.target.tagName.toLowerCase() !== 'button') {
@@ -352,23 +380,33 @@
       thToggleBtn.textContent = thPanel.classList.contains('minimized') ? '+' : '−';
     });
 
-    document.getElementById('btnManualHold').addEventListener('click', () => {
+    hudShadow.getElementById('btnManualHold').addEventListener('click', () => {
+      if (isStopped) {
+        resumeAllResources();
+      }
       startBurstHold(true);
     });
 
-    document.getElementById('btnTestChime').addEventListener('click', () => {
+    hudShadow.getElementById('btnToggleStop').addEventListener('click', () => {
+      if (isStopped) {
+        resumeAllResources();
+      } else {
+        stopAllResources(true);
+      }
+    });
+
+    hudShadow.getElementById('btnTestChime').addEventListener('click', () => {
       playSuccessChime();
     });
 
     updateHUDDisplay();
   }
 
-  // Update HUD Display with Current Config
   function updateHUDDisplay() {
-    if (!config) return;
-    const targetTextEl = document.getElementById('hudTargetText');
-    const launchTextEl = document.getElementById('hudLaunchTimeText');
-    const sessionCdEl = document.getElementById('hudSessionCd');
+    if (!config || !hudShadow) return;
+    const targetTextEl = hudShadow.getElementById('hudTargetText');
+    const launchTextEl = hudShadow.getElementById('hudLaunchTimeText');
+    const sessionCdEl = hudShadow.getElementById('hudSessionCd');
 
     if (targetTextEl) {
       targetTextEl.textContent = `${config.targetDate} ${config.targetTime.slice(0, 5)}`;
@@ -382,11 +420,11 @@
     }
   }
 
-  // Update Status Badge
   function updateStatus(type, message) {
-    const badge = document.getElementById('hudStatusBadge');
-    const text = document.getElementById('hudStatusText');
-    const icon = document.getElementById('hudStatusIcon');
+    if (!hudShadow) return;
+    const badge = hudShadow.getElementById('hudStatusBadge');
+    const text = hudShadow.getElementById('hudStatusText');
+    const icon = hudShadow.getElementById('hudStatusIcon');
     if (!badge || !text || !icon) return;
 
     badge.className = `th-status-badge ${type}`;
@@ -394,42 +432,73 @@
 
     if (type === 'waiting') icon.textContent = '⏳';
     else if (type === 'burst') icon.textContent = '🔥';
-    else if (type === 'working') icon.textContent = '🚀';
-    else if (type === 'alert') icon.textContent = '🚨';
-    else icon.textContent = '🎉';
+    else if (type === 'stopped') icon.textContent = '⏹️';
+    else if (type === 'success') icon.textContent = '🎉';
+    else icon.textContent = '🟢';
   }
 
-  // Realtime Clock & Countdown Updater
+  // ==========================================
+  // 4. 時鐘與觸發器 (50ms 溫和定時，低負載)
+  // ==========================================
+
   function startClock() {
     if (countdownTimer) clearInterval(countdownTimer);
 
     countdownTimer = setInterval(() => {
+      if (isStopped) return;
+
       const now = new Date();
       const pad = (n, len = 2) => String(n).padStart(len, '0');
       const ms = String(now.getMilliseconds()).padStart(3, '0');
       const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${ms}`;
 
-      const clockEl = document.getElementById('hudClock');
-      if (clockEl) {
-        clockEl.textContent = timeStr;
+      if (hudShadow) {
+        const clockEl = hudShadow.getElementById('hudClock');
+        if (clockEl) {
+          clockEl.textContent = timeStr;
+        }
       }
 
-      // Check Launch Trigger (Taiwan time / Local time: e.g. 07:59:59.985)
+      // 開賣觸發 (僅在 07:59:59.985 ~ 08:00:10.000 之間發動)
       if (config && config.autoHold && !isBursting && !slotLocked && !window.location.pathname.includes('/orders/add')) {
         const targetLaunchStr = config.launchTime || '07:59:59.985';
         if (timeStr >= targetLaunchStr && timeStr <= '08:00:10.000') {
-          console.log('[TakachihoHelper] 達到預定發動時間！立即啟動精準鎖位 (Burst Hold)...');
+          console.log('[TakachihoHelper] 達到開賣預定發動時間！立即啟動精準鎖位 (Burst Hold)...');
           startBurstHold(false);
         }
       }
-    }, 20);
+    }, 50);
   }
 
-  // Resolve Session CD for Target Date & Time
-  async function resolveSessionCd() {
-    if (!config) return;
+  // ==========================================
+  // 5. Session CD 解析與網址直達
+  // ==========================================
 
-    // 0. Priority: Extract directly from current page URL query parameters
+  function getEndDatetime(startDatetimeStr) {
+    try {
+      const parts = startDatetimeStr.split(' ');
+      const dateParts = parts[0].split('/');
+      const timeParts = parts[1].split(':');
+      const d = new Date(
+        parseInt(dateParts[0], 10),
+        parseInt(dateParts[1], 10) - 1,
+        parseInt(dateParts[2], 10),
+        parseInt(timeParts[0], 10),
+        parseInt(timeParts[1], 10),
+        parseInt(timeParts[2], 10)
+      );
+      d.setMinutes(d.getMinutes() + 30);
+      const pad = (n, len = 2) => String(n).padStart(len, '0');
+      return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    } catch (e) {
+      return startDatetimeStr;
+    }
+  }
+
+  async function resolveSessionCd() {
+    if (!config || isStopped) return;
+
+    // 0. 優先直接從當前網址參數解析
     try {
       const currentUrlParams = new URLSearchParams(window.location.search);
       const urlSessionCd = currentUrlParams.get('service_session_cd');
@@ -441,7 +510,7 @@
       }
     } catch (e) {}
 
-    // Priority 0.5: Extract from config.targetUrl if present
+    // 0.5 從設定的目標網址中解析
     if (config.targetUrl && config.targetUrl.includes('service_session_cd=')) {
       try {
         const u = new URL(config.targetUrl);
@@ -455,7 +524,7 @@
       } catch (e) {}
     }
 
-    // 1. Scan DOM for event button (order_with_statement) or calendar items
+    // 1. 從頁面上的按鈕尋找
     const statementBtn = document.querySelector('button.order_with_statement, button[data-service_session_cd]');
     if (statementBtn) {
       const sCd = statementBtn.getAttribute('data-service_session_cd');
@@ -467,6 +536,7 @@
       }
     }
 
+    // 2. 從日曆 DOM 尋找
     const startTarget = `${config.targetDate} ${config.targetTime}`;
     const domInputs = document.querySelectorAll('.service_unit_service_start_datetime');
     for (const inp of domInputs) {
@@ -484,7 +554,7 @@
       }
     }
 
-    // 2. Query eventCalendars/search API directly
+    // 3. 透過 search API 解析
     try {
       const parts = config.targetDate.split('/');
       const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
@@ -526,7 +596,6 @@
         }
         if (results.length > 0 && !resolvedSessionCd) {
           resolvedSessionCd = results[0].service_session_cd || results[0].session_cd;
-          console.log('[TakachihoHelper] 採用日曆相近時段 Session CD:', resolvedSessionCd);
           updateHUDDisplay();
         }
       }
@@ -537,7 +606,10 @@
     return resolvedSessionCd;
   }
 
-  // Single Hold Slot Request
+  // ==========================================
+  // 6. 精準鎖位引擎 (hold_slot 首發 + 250ms 重試)
+  // ==========================================
+
   async function sendHoldSlotRequest(sessionCd, startDt, endDt) {
     try {
       const formData = new URLSearchParams();
@@ -555,19 +627,16 @@
         body: formData
       });
 
-      const json = await resp.json();
-      return json;
+      return await resp.json();
     } catch (e) {
       return { error: e.message };
     }
   }
 
-  // 🎯 精準鎖位核心 (利用 20ms 單向延遲首發命中，隨後以 250ms 安全重試)
   async function startBurstHold(isManual = false) {
-    if (isBursting || slotLocked) return;
+    if (isBursting || slotLocked || isStopped) return;
     isBursting = true;
     burstAttempts = 0;
-    const SAFE_MAX_ATTEMPTS = 12; // 最多重試 12 次 (約 3 秒，安全不被擋)
 
     if (!resolvedSessionCd) {
       await resolveSessionCd();
@@ -577,9 +646,8 @@
     const startDt = `${config.targetDate} ${config.targetTime}`;
     const endDt = getEndDatetime(startDt);
 
-    updateStatus('burst', '🎯 精準鎖位中 (首發命中，250ms 安全重送)...');
+    updateStatus('burst', '🎯 精準鎖位中 (首發送出，250ms 安全重送)...');
 
-    // 雙軌防護：若頁面出現「予約手続き」按鈕，同步秒速點擊
     const checkAndClickBtn = () => {
       const btn = document.querySelector('button.order_with_statement');
       if (btn && btn.offsetParent !== null) {
@@ -589,7 +657,7 @@
     };
 
     const doHoldTick = async () => {
-      if (slotLocked) return;
+      if (slotLocked || isStopped) return;
 
       burstAttempts++;
       checkAndClickBtn();
@@ -607,112 +675,83 @@
 
         playSuccessChime();
         updateStatus('success', '🎉 席位鎖定成功！獲得 15 分鐘保留期！');
-        showModalSuccessNotification();
 
-        // 立即以同 Session 跳轉到預約頁面
+        // 立即以同 Session 跳轉到預約輸入頁面
         setTimeout(() => {
           const orderUrl = `/takachiho1/orders/add?service_cd=${encodeURIComponent(SERVICE_CD)}&service_session_cd=${encodeURIComponent(sessionCd)}&service_start_datetime=${encodeURIComponent(startDt)}&service_end_datetime=${encodeURIComponent(endDt)}`;
           window.location.href = orderUrl;
-        }, 400);
+        }, 300);
         return;
       }
 
-      // If full or exceeded max retries
+      // 超過次數或已滿
       if (burstAttempts >= SAFE_MAX_ATTEMPTS) {
         isBursting = false;
         if (burstInterval) clearInterval(burstInterval);
-        const msg = (json && json.message && json.message[0]) || '已完成嘗試或已額滿';
+        const msg = (json && json.message && json.message[0]) || '已完成嘗試或目前尚未開放';
         updateStatus('waiting', `⚠️ ${msg}`);
       }
     };
 
-    // First shot immediately (at 07:59:59.985, reaching server right at 08:00:00.005!)
+    // 首發立刻送出
     doHoldTick();
 
-    // Subsequent shots safely every 250ms (human-like rapid click, 0 risk of rate limit)
+    // 後續以 250ms 溫和安全重送
     burstInterval = setInterval(doHoldTick, 250);
   }
 
-  // Giant Celebration Modal on Slot Hold Success
-  function showModalSuccessNotification() {
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.85);
-      z-index: 10000000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: sans-serif;
-    `;
-    modal.innerHTML = `
-      <div style="background: #fff; padding: 32px; border-radius: 14px; text-align: center; max-width: 480px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.6);">
-        <h2 style="font-size: 28px; color: #16a34a; margin-bottom: 14px;">🎉 席位鎖定成功！</h2>
-        <p style="font-size: 17px; color: #1e293b; margin-bottom: 16px; line-height: 1.5; font-weight: 600;">
-          已成功搶下時段！享有 <span style="color: #dc2626;">15 分鐘獨占保留期 (仮押さえ)</span>！<br>
-          正在進入預約輸入頁面...
-        </p>
-        <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; font-size: 13px; color: #475569; line-height: 1.6; text-align: left;">
-          ✅ <strong>這 15 分鐘內其他人無法搶走這艘船！</strong><br>
-          ✅ 請在畫面上從容手動填寫代表者姓名、電話、地址與信用卡資料。<br>
-          ✅ 進入發卡銀行 3D 簡訊驗證頁面時，小幫手會自動發出警報聲提醒您輸入 OTP！
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
+  // ==========================================
+  // 7. 輕量按鈕監控
+  // ==========================================
+
+  function startButtonObserver() {
+    if (btnObserver) btnObserver.disconnect();
+
+    const targetContainer = document.getElementById('main') || document.getElementById('content') || document.body;
+    if (!targetContainer) return;
+
+    btnObserver = new MutationObserver(() => {
+      if (isStopped || slotLocked) return;
+      if (config && config.autoClickStatement) {
+        const btn = document.querySelector('button.order_with_statement');
+        if (btn && btn.offsetParent !== null) {
+          console.log('[TakachihoHelper] 監控偵測到「予約手続き」按鈕出現！立即毫秒自動點擊！');
+          btn.click();
+          if (btnObserver) {
+            btnObserver.disconnect();
+            btnObserver = null;
+          }
+        }
+      }
+    });
+
+    btnObserver.observe(targetContainer, { childList: true, subtree: true });
   }
 
-  // 3D Secure / OTP Verification Detector
-  function checkOtpVerificationPage() {
-    const url = window.location.href.toLowerCase();
-    const bodyText = document.body ? document.body.innerText : '';
+  // ==========================================
+  // 8. 初始化入口
+  // ==========================================
 
-    const isOtp =
-      url.includes('3dsecure') ||
-      url.includes('3d_secure') ||
-      url.includes('acs') ||
-      url.includes('otp') ||
-      url.includes('card_auth') ||
-      url.includes('payjp.com/v2/secure') ||
-      bodyText.includes('本人認証') ||
-      bodyText.includes('ワンタイムパスワード') ||
-      bodyText.includes('SMS認証') ||
-      bodyText.includes('認証コード') ||
-      bodyText.includes('One-Time Password');
-
-    if (isOtp) {
-      console.log('[TakachihoHelper] 🚨 偵測到 3D 驗證頁面已啟動！');
-      updateStatus('alert', '🚨 請輸入銀行簡訊驗證碼 (OTP)！');
-
-      playOtpAlertSound();
-      if (!alarmInterval) {
-        alarmInterval = setInterval(playOtpAlertSound, 3500);
-      }
-
-      if (!document.getElementById('takachiho-otp-banner')) {
-        const banner = document.createElement('div');
-        banner.id = 'takachiho-otp-banner';
-        banner.style.cssText = `
-          position: fixed; top: 0; left: 0; right: 0;
-          background: #dc2626; color: #fff;
-          padding: 14px 20px; font-size: 16px; font-weight: 800;
-          text-align: center; z-index: 10000001;
-          box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
-          animation: th-burst-pulse 0.8s infinite alternate;
-        `;
-        banner.innerHTML = `🔔 3D 驗證頁面已就緒！請立即輸入手機簡訊驗證碼 (OTP) 完成預約！`;
-        document.body.prepend(banner);
-      }
-    } else {
-      if (alarmInterval) {
-        clearInterval(alarmInterval);
-        alarmInterval = null;
-      }
-    }
+  async function loadConfig() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([STORAGE_KEY], (res) => {
+        config = res[STORAGE_KEY] || {
+          targetUrl: 'https://eipro.jp/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a916a6-59c8-459d-9643-a231c0a8018d&service_start_datetime=2026/11/07%2008:30:00&service_end_datetime=2026/11/07%2009:00:00',
+          targetDate: '2026/11/07',
+          targetTime: '08:30:00',
+          launchBaseTime: '08:00:00',
+          earlyBufferMs: '15',
+          launchTime: '07:59:59.985',
+          adultCount: '2',
+          childCount: '0',
+          autoHold: true,
+          autoClickStatement: true
+        };
+        resolve(config);
+      });
+    });
   }
 
-  // Listen for messages from popup
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'SETTINGS_UPDATED') {
       config = request.profile;
@@ -722,35 +761,20 @@
     return true;
   });
 
-  // Main Entry Point
   async function init() {
     await loadConfig();
     createHUD();
     startClock();
 
-    // 1. If on calendar or event detail page, resolve Session CD ahead of time
     if (window.location.pathname.includes('/eventCalendars') || window.location.pathname.includes('/events/view')) {
       resolveSessionCd();
-
-      // Monitor for "予約手続き" button appearance
-      const btnObserver = new MutationObserver(() => {
-        if (config && config.autoClickStatement && !slotLocked) {
-          const btn = document.querySelector('button.order_with_statement');
-          if (btn && btn.offsetParent !== null) {
-            console.log('[TakachihoHelper] 監控偵測到「予約手続き」按鈕出現！立即毫秒自動點擊！');
-            btn.click();
-          }
-        }
-      });
-      btnObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
+      startButtonObserver();
     }
 
-    // 2. If already on orders/add page, show peaceful 15-minute countdown indicator
     if (window.location.pathname.includes('/orders/add')) {
       updateStatus('success', '🎯 席位已鎖定！擁有 15 分鐘保留期');
       playSuccessChime();
 
-      // Top banner assuring the user
       const topBanner = document.createElement('div');
       topBanner.style.cssText = `
         background: #dcfce7; border-bottom: 2px solid #86efac; color: #166534;
@@ -759,13 +783,6 @@
       topBanner.innerHTML = `🎉 恭喜！席位已為您鎖定保留 15 分鐘（剩餘時間見下方計時）！請在下方從容填妥代表者與信用卡資料即可。`;
       document.body.prepend(topBanner);
     }
-
-    // 3. 3D Secure Verification Poller
-    checkOtpVerificationPage();
-    const otpObserver = new MutationObserver(() => {
-      checkOtpVerificationPage();
-    });
-    otpObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
   }
 
   if (document.readyState === 'loading') {
