@@ -1,0 +1,12 @@
+--- baseline_20261025_0830
++++ new_20261025_0830_20261011_080018
+@@ -553,7 +553,8 @@
+ <div id='service_date_list_dialog' style='display:none;' class='external-events w500'>
+ 	<input type="hidden" name="data[service_date]" class="api_service_date" value="" data-field_name="service_date"/><input type="hidden" name="data[service_cd]" class="api_service_cd" value="" data-field_name="service_cd"/><input type="hidden" name="data[summary_flg]" class="api_summary_flg" value="" data-field_name="summary_flg"/>	<div id='service_date_list' class='mgn10B wMax list'></div>
+ </div>
+-<!-- service_date_list_dialog[end] --><div class="h60"></div><div class="s-12 l-3"></div><div class="s-12 l-6"><button type="button" class="front_btn color_config order_with_statement" data-service_cd="6892dd9d-5b54-4202-bd1d-4aa6c0a8018d" data-service_session_cd="68a914a3-4d0c-4b20-88e0-9dd8c0a8018d" data-service_start_datetime="2026/10/25 08:30:00" data-service_end_datetime="2026/10/25 09:00:00" data-login_and_display_type="0" data-order_after_login_flg="0" data-order_with_current_auth_status_flg="1" data-login_dialog_regist_display_flg="0" data-is_login_user="0"><span class="omit_outer"><span class="omit_inner">予約手続き</span></span></button></div><div class="s-12 l-3"></div><!-- order_cancel_waiting_dialog[start] -->
++<!-- service_date_list_dialog[end] --><div class="h60"></div><div class="s-12 l-3"></div><div class="s-12 l-6"><!-- [ctrl]Service.service_unit_order_disable_btn[start] -->
++<button class="front_btn click_prohibit"><span class="omit_outer"><span class="omit_inner">予約終了</span></span></button><!-- [ctrl]Service.service_unit_order_disable_btn[end] --></div><div class="s-12 l-3"></div><!-- order_cancel_waiting_dialog[start] -->
+ <div id='order_cancel_waiting_dialog' style='display: none;' class='external-events w500'>
+ 	<input type="hidden" name="data[service_cd]" class="api_service_cd" value="" data-field_name="service_cd"/><input type="hidden" name="data[service_session_cd]" class="api_service_session_cd" value="" data-field_name="service_session_cd"/><input type="hidden" name="data[service_start_datetime]" class="api_service_start_datetime" value="" data-field_name="service_start_datetime"/><input type="hidden" name="data[service_end_datetime]" class="api_service_end_datetime" value="" data-field_name="service_end_datetime"/>	<div id='order_cancel_waiting_area' class='mgn10B alignC'></div>
+ </div>
