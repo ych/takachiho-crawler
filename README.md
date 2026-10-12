@@ -7,7 +7,7 @@
 ## 📥 擴充功能直接下載（免用 Git，下載即可使用）
 
 如果您或同行的旅伴需要使用搶位擴充功能，可以直接下載預先打包好的 ZIP 壓縮檔：
-* 📦 **[點此直接下載 takachiho-boat-helper.zip (最新發行版 v1.0.0)](https://github.com/ych/takachiho-crawler/releases/download/v1.0.0/takachiho-boat-helper.zip)**
+* 📦 **[點此直接下載 takachiho-boat-helper.zip (最新發行版 v1.0.2 防呆除錯版)](https://github.com/ych/takachiho-crawler/releases/download/v1.0.2/takachiho-boat-helper.zip)**
 * 🌐 **[GitHub Releases 官方發布頁](https://github.com/ych/takachiho-crawler/releases/latest)**
 
 > **3 步驟安裝使用**：

@@ -1,9 +1,10 @@
-// content.js - Takachiho Gorge Boat Slot-Locking Specialist (高千穂峡ボート 極速佔位助手)
+// content.js - Takachiho Gorge Boat Slot-Locking Specialist v1.0.2 (高千穂峡ボート 極速佔位助手)
 // 輕量、純淨、零卡頓架構：使用 Shadow DOM 隔離，杜絕 DOM 重繪迴圈與崩潰
 (function () {
   'use strict';
 
   const STORAGE_KEY = 'takachiho_booking_profile';
+  const LOGS_STORAGE_KEY = 'takachiho_recent_logs';
   const SERVICE_CD = '6892dd9d-5b54-4202-bd1d-4aa6c0a8018d';
 
   let config = null;
@@ -22,6 +23,77 @@
   let hudHost = null;
   let hudShadow = null;
 
+  // 日誌隊列 (上限 80 條)
+  const MAX_LOGS = 80;
+  let debugLogs = [];
+
+  // ==========================================
+  // 0. 日誌系統 (Console 染色、HUD 顯示、儲存、下載檔案)
+  // ==========================================
+
+  function getTimestamp() {
+    const now = new Date();
+    const pad = (n, len = 2) => String(n).padStart(len, '0');
+    return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+  }
+
+  function addLog(msg, level = 'info') {
+    const time = getTimestamp();
+    const entry = { time, msg, level };
+    debugLogs.push(entry);
+    if (debugLogs.length > MAX_LOGS) debugLogs.shift();
+
+    const styles = {
+      info: 'color: #0284c7; font-weight: bold;',
+      success: 'color: #16a34a; font-weight: bold;',
+      warn: 'color: #d97706; font-weight: bold;',
+      error: 'color: #dc2626; font-weight: bold;'
+    };
+    console.log(`%c[TakachihoHelper][${level.toUpperCase()}][${time}]`, styles[level] || styles.info, msg);
+
+    updateHUDLogs();
+
+    try {
+      chrome.storage.local.get([LOGS_STORAGE_KEY], (res) => {
+        let savedLogs = res[LOGS_STORAGE_KEY] || [];
+        savedLogs.push(entry);
+        if (savedLogs.length > MAX_LOGS) savedLogs = savedLogs.slice(-MAX_LOGS);
+        chrome.storage.local.set({ [LOGS_STORAGE_KEY]: savedLogs });
+      });
+    } catch (e) {}
+  }
+
+  function updateHUDLogs() {
+    if (!hudShadow) return;
+    const logBox = hudShadow.getElementById('hudLogBox');
+    if (!logBox) return;
+    const lines = debugLogs.map((l) => `[${l.time}][${l.level.toUpperCase()}] ${l.msg}`);
+    logBox.textContent = lines.length ? lines.join('\n') : '尚無日誌';
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function downloadHUDLogs() {
+    const lines = debugLogs.map((l) => `[${l.time}][${l.level.toUpperCase()}] ${l.msg}`);
+    const now = new Date();
+    const pad = (n, len = 2) => String(n).padStart(len, '0');
+    const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const filename = `takachiho_hud_${dateStr}.log`;
+
+    const content = `==========================================================\nTakachiho Gorge Boat Helper v1.0.2 - HUD Log Export\nURL: ${window.location.href}\nExport Time: ${new Date().toLocaleString()}\n==========================================================\n\n` + lines.join('\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    addLog(`📥 已成功匯出 Log 檔案至下載項目: ${filename}`, 'success');
+  }
+
   // ==========================================
   // 1. 資源釋放與生命週期控制 (Stop & Resume)
   // ==========================================
@@ -30,7 +102,6 @@
     isStopped = true;
     isBursting = false;
 
-    // 清除所有計時器
     if (countdownTimer) {
       clearInterval(countdownTimer);
       countdownTimer = null;
@@ -40,13 +111,11 @@
       burstInterval = null;
     }
 
-    // 斷開 DOM 監控
     if (btnObserver) {
       btnObserver.disconnect();
       btnObserver = null;
     }
 
-    // 關閉並釋放音訊資源
     if (audioCtx) {
       try {
         audioCtx.close().catch(() => {});
@@ -58,7 +127,7 @@
     updateStopButtonUI(true);
 
     if (logMessage) {
-      console.log('[TakachihoHelper] 🛑 已手動停止搶位，所有 Timer、Observer、Audio 資源均已成功釋放！');
+      addLog('🛑 已手動停止搶位，所有 Timer、Observer、Audio 資源均已成功釋放！', 'warn');
     }
   }
 
@@ -71,7 +140,7 @@
     startButtonObserver();
     resolveSessionCd();
 
-    console.log('[TakachihoHelper] ▶️ 已重新啟動搶位監控！');
+    addLog('▶️ 已重新啟動搶位監控！', 'info');
   }
 
   function updateStopButtonUI(isCurrentlyStopped) {
@@ -188,6 +257,12 @@
           gap: 6px;
           font-size: 13px;
         }
+        .th-version-badge {
+          font-size: 10px;
+          background: rgba(255, 255, 255, 0.2);
+          padding: 1px 4px;
+          border-radius: 3px;
+        }
         .th-toggle-btn {
           background: transparent;
           border: none;
@@ -248,6 +323,11 @@
           background: #f1f5f9;
           color: #475569;
           border-color: #cbd5e1;
+        }
+        .th-status-badge.success {
+          background: #dcfce7;
+          color: #15803d;
+          border-color: #86efac;
         }
         .th-clock {
           text-align: center;
@@ -317,12 +397,41 @@
           color: #475569;
           line-height: 1.4;
         }
+        .th-log-details {
+          border: 1px solid #e2e8f0;
+          border-radius: 4px;
+          background: #f8fafc;
+          padding: 4px 6px;
+          font-size: 11px;
+        }
+        .th-log-details summary {
+          cursor: pointer;
+          color: #0369a1;
+          font-weight: 600;
+          outline: none;
+        }
+        .th-log-body {
+          margin-top: 4px;
+        }
+        .th-log-box {
+          background: #0f172a;
+          color: #f8fafc;
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+          font-size: 10px;
+          padding: 6px;
+          border-radius: 4px;
+          max-height: 100px;
+          overflow-y: auto;
+          white-space: pre-wrap;
+          word-break: break-all;
+        }
       </style>
       <div class="th-container">
         <div class="th-panel" id="thPanel">
           <div class="th-header" id="thHeader">
             <div class="th-header-title">
               <span>🛶 高千穂峡ボート 搶位助手</span>
+              <span class="th-version-badge">v1.0.2</span>
             </div>
             <button type="button" class="th-toggle-btn" id="thToggleBtn">−</button>
           </div>
@@ -356,6 +465,14 @@
             <div class="th-memo-box">
               💡 <strong>唯一目標</strong>：全力鎖定席位 (15 分鐘獨占保留期)！預約資料請在畫面上從容手動填寫。
             </div>
+
+            <details class="th-log-details" id="hudLogDetails">
+              <summary>📋 即時除錯日誌 (支援匯出 .log)</summary>
+              <div class="th-log-body">
+                <button type="button" class="th-btn th-btn-secondary" id="btnHudDownloadLogs" style="height: 22px; font-size: 11px; margin-bottom: 4px;">📥 匯出 .log 檔案</button>
+                <div class="th-log-box" id="hudLogBox">尚無日誌</div>
+              </div>
+            </details>
           </div>
         </div>
       </div>
@@ -399,7 +516,13 @@
       playSuccessChime();
     });
 
+    const btnHudDownload = hudShadow.getElementById('btnHudDownloadLogs');
+    if (btnHudDownload) {
+      btnHudDownload.addEventListener('click', downloadHUDLogs);
+    }
+
     updateHUDDisplay();
+    updateHUDLogs();
   }
 
   function updateHUDDisplay() {
@@ -416,7 +539,7 @@
     }
     if (sessionCdEl) {
       sessionCdEl.textContent = resolvedSessionCd ? `${resolvedSessionCd.slice(0, 13)}...` : '解析中...';
-      sessionCdEl.title = resolvedSessionCd;
+      sessionCdEl.title = resolvedSessionCd || '未解析';
     }
   }
 
@@ -463,7 +586,7 @@
       if (config && config.autoHold && !isBursting && !slotLocked && !window.location.pathname.includes('/orders/add')) {
         const targetLaunchStr = config.launchTime || '07:59:59.985';
         if (timeStr >= targetLaunchStr && timeStr <= '08:00:10.000') {
-          console.log('[TakachihoHelper] 達到開賣預定發動時間！立即啟動精準鎖位 (Burst Hold)...');
+          addLog(`達到開賣預定發動時間 (${timeStr})！立即啟動精準鎖位 (Burst Hold)...`, 'info');
           startBurstHold(false);
         }
       }
@@ -471,7 +594,7 @@
   }
 
   // ==========================================
-  // 5. Session CD 解析與網址直達
+  // 5. Session CD 防呆解析與網址直達
   // ==========================================
 
   function getEndDatetime(startDatetimeStr) {
@@ -498,39 +621,54 @@
   async function resolveSessionCd() {
     if (!config || isStopped) return;
 
-    // 0. 優先直接從當前網址參數解析
+    // 0. 優先直接從當前網址參數解析 (檢查日期防呆)
     try {
       const currentUrlParams = new URLSearchParams(window.location.search);
       const urlSessionCd = currentUrlParams.get('service_session_cd');
+      const urlStartDt = currentUrlParams.get('service_start_datetime');
       if (urlSessionCd) {
-        resolvedSessionCd = urlSessionCd;
-        console.log('[TakachihoHelper] 從當前網址參數直接解析 Session CD:', resolvedSessionCd);
-        updateHUDDisplay();
-        return resolvedSessionCd;
+        if (!urlStartDt || decodeURIComponent(urlStartDt).startsWith(config.targetDate)) {
+          resolvedSessionCd = urlSessionCd;
+          addLog(`[防呆通過] 從當前網址參數直接解析 Session CD: ${resolvedSessionCd.slice(0, 10)}...`, 'success');
+          updateHUDDisplay();
+          return resolvedSessionCd;
+        } else {
+          addLog(`[防呆攔截] 當前網址的時段 (${urlStartDt}) 與目標設定日期 (${config.targetDate}) 不符，跳過網址參數。`, 'warn');
+        }
       }
     } catch (e) {}
 
-    // 0.5 從設定的目標網址中解析
+    // 0.5 從設定的目標網址中解析 (關鍵防呆：嚴格檢查日期是否與 config.targetDate 一致)
     if (config.targetUrl && config.targetUrl.includes('service_session_cd=')) {
       try {
         const u = new URL(config.targetUrl);
+        const rawStartDt = u.searchParams.get('service_start_datetime');
+        const urlStartDt = rawStartDt ? decodeURIComponent(rawStartDt) : '';
         const tSessionCd = u.searchParams.get('service_session_cd');
+
         if (tSessionCd) {
-          resolvedSessionCd = tSessionCd;
-          console.log('[TakachihoHelper] 從目標網址設定直接解析 Session CD:', resolvedSessionCd);
-          updateHUDDisplay();
-          return resolvedSessionCd;
+          if (!urlStartDt || urlStartDt.startsWith(config.targetDate)) {
+            resolvedSessionCd = tSessionCd;
+            addLog(`[防呆通過] 從目標網址解析出相符日期的 Session CD: ${resolvedSessionCd.slice(0, 10)}...`, 'success');
+            updateHUDDisplay();
+            return resolvedSessionCd;
+          } else {
+            addLog(`[防呆攔截] 目標網址內日期 (${urlStartDt}) 與目標設定日期 (${config.targetDate}) 不一致！拒絕沿用該 Session CD。`, 'warn');
+          }
         }
-      } catch (e) {}
+      } catch (e) {
+        addLog(`解析目標網址失敗: ${e.message}`, 'error');
+      }
     }
 
     // 1. 從頁面上的按鈕尋找
     const statementBtn = document.querySelector('button.order_with_statement, button[data-service_session_cd]');
     if (statementBtn) {
+      const btnStartDt = statementBtn.getAttribute('data-service_start_datetime');
       const sCd = statementBtn.getAttribute('data-service_session_cd');
-      if (sCd) {
+      if (sCd && (!btnStartDt || btnStartDt.startsWith(config.targetDate))) {
         resolvedSessionCd = sCd;
-        console.log('[TakachihoHelper] 從「予約手続き」按鈕取得 Session CD:', resolvedSessionCd);
+        addLog(`[防呆通過] 從「予約手続き」按鈕取得 Session CD: ${resolvedSessionCd.slice(0, 10)}...`, 'success');
         updateHUDDisplay();
         return resolvedSessionCd;
       }
@@ -546,7 +684,7 @@
           const sInp = container.querySelector('.service_unit_service_session_cd');
           if (sInp && sInp.value) {
             resolvedSessionCd = sInp.value;
-            console.log('[TakachihoHelper] 從日曆 DOM 找到時段 Session CD:', resolvedSessionCd);
+            addLog(`[防呆通過] 從日曆 DOM 找到對應時段 Session CD: ${resolvedSessionCd.slice(0, 10)}...`, 'success');
             updateHUDDisplay();
             return resolvedSessionCd;
           }
@@ -556,6 +694,7 @@
 
     // 3. 透過 search API 解析
     try {
+      addLog(`嘗試透過 eventCalendars/search API 查詢 ${config.targetDate} 時段...`, 'info');
       const parts = config.targetDate.split('/');
       const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
       const nextD = new Date(d);
@@ -589,18 +728,28 @@
         for (const item of results) {
           if (item.service_start_datetime && item.service_start_datetime.trim() === startTarget) {
             resolvedSessionCd = item.service_session_cd || item.session_cd;
-            console.log('[TakachihoHelper] 從 Search API 成功解析 Session CD:', resolvedSessionCd);
+            addLog(`[防呆通過] 從 Search API 成功解析 Session CD: ${resolvedSessionCd.slice(0, 10)}...`, 'success');
             updateHUDDisplay();
             return resolvedSessionCd;
           }
         }
-        if (results.length > 0 && !resolvedSessionCd) {
-          resolvedSessionCd = results[0].service_session_cd || results[0].session_cd;
-          updateHUDDisplay();
-        }
       }
     } catch (e) {
-      console.warn('[TakachihoHelper] 解析 Session CD 失敗:', e);
+      addLog(`Search API 解析失敗: ${e.message}`, 'warn');
+    }
+
+    // 4. 若仍未解析，依日期進行預備代碼回退防呆
+    if (!resolvedSessionCd) {
+      if (config.targetDate === '2026/10/26') {
+        resolvedSessionCd = '68a914cc-b08c-4413-94a1-9dd8c0a8018d';
+        addLog(`[預備代碼] 自動帶入 10/26 專屬預備 Session CD: ${resolvedSessionCd.slice(0, 10)}...`, 'info');
+      } else if (config.targetDate === '2026/11/07') {
+        resolvedSessionCd = '68a916a6-59c8-459d-9643-a231c0a8018d';
+        addLog(`[預備代碼] 自動帶入 11/07 專屬預備 Session CD: ${resolvedSessionCd.slice(0, 10)}...`, 'info');
+      } else {
+        addLog(`[警告] 尚未解析出 ${config.targetDate} 的 Session 代碼，請確認網址或重整日曆。`, 'warn');
+      }
+      updateHUDDisplay();
     }
 
     return resolvedSessionCd;
@@ -642,16 +791,24 @@
       await resolveSessionCd();
     }
 
-    const sessionCd = resolvedSessionCd || '68a916a6-59c8-459d-9643-a231c0a8018d';
+    if (!resolvedSessionCd) {
+      addLog(`[防呆中斷] 無法確認 ${config.targetDate} 的 Session 代碼，為防止向伺服器發送無效請求已安全中止。`, 'error');
+      updateStatus('stopped', '⚠️ 無效 Session 代碼');
+      isBursting = false;
+      return;
+    }
+
+    const sessionCd = resolvedSessionCd;
     const startDt = `${config.targetDate} ${config.targetTime}`;
     const endDt = getEndDatetime(startDt);
 
+    addLog(`🎯 啟動鎖位！時段: ${startDt}, Session: ${sessionCd.slice(0, 10)}...`, 'info');
     updateStatus('burst', '🎯 精準鎖位中 (首發送出，250ms 安全重送)...');
 
     const checkAndClickBtn = () => {
       const btn = document.querySelector('button.order_with_statement');
       if (btn && btn.offsetParent !== null) {
-        console.log('[TakachihoHelper] 發現「予約手続き」按鈕！立即點擊！');
+        addLog('發現「予約手続き」按鈕！立即觸發點擊！', 'success');
         btn.click();
       }
     };
@@ -665,18 +822,20 @@
       updateStatus('burst', `🎯 鎖位請求中 (第 ${burstAttempts} 次)...`);
 
       const json = await sendHoldSlotRequest(sessionCd, startDt, endDt);
-      console.log(`[TakachihoHelper][第 ${burstAttempts} 次] 回應:`, json);
+      const isOk = json && json.data && String(json.data.result) === '1';
+      const msg = (json && json.message && json.message[0]) || (json.error ? `連線錯誤: ${json.error}` : '無訊息');
 
-      if (json && json.data && String(json.data.result) === '1') {
-        // 🎉 席位鎖定成功！
+      addLog(`[第 ${burstAttempts} 次連發] 回應: result=${json?.data?.result ?? 0}, msg=${msg}`, isOk ? 'success' : 'warn');
+
+      if (isOk) {
         slotLocked = true;
         isBursting = false;
         if (burstInterval) clearInterval(burstInterval);
 
         playSuccessChime();
+        addLog('🎉🎉🎉 席位鎖定成功！取得 15 分鐘保留期！正在跳轉預約頁面...', 'success');
         updateStatus('success', '🎉 席位鎖定成功！獲得 15 分鐘保留期！');
 
-        // 立即以同 Session 跳轉到預約輸入頁面
         setTimeout(() => {
           const orderUrl = `/takachiho1/orders/add?service_cd=${encodeURIComponent(SERVICE_CD)}&service_session_cd=${encodeURIComponent(sessionCd)}&service_start_datetime=${encodeURIComponent(startDt)}&service_end_datetime=${encodeURIComponent(endDt)}`;
           window.location.href = orderUrl;
@@ -684,19 +843,15 @@
         return;
       }
 
-      // 超過次數或已滿
       if (burstAttempts >= SAFE_MAX_ATTEMPTS) {
         isBursting = false;
         if (burstInterval) clearInterval(burstInterval);
-        const msg = (json && json.message && json.message[0]) || '已完成嘗試或目前尚未開放';
+        addLog(`已完成 ${SAFE_MAX_ATTEMPTS} 次嘗試，終止連發。最後訊息: ${msg}`, 'warn');
         updateStatus('waiting', `⚠️ ${msg}`);
       }
     };
 
-    // 首發立刻送出
     doHoldTick();
-
-    // 後續以 250ms 溫和安全重送
     burstInterval = setInterval(doHoldTick, 250);
   }
 
@@ -715,7 +870,7 @@
       if (config && config.autoClickStatement) {
         const btn = document.querySelector('button.order_with_statement');
         if (btn && btn.offsetParent !== null) {
-          console.log('[TakachihoHelper] 監控偵測到「予約手続き」按鈕出現！立即毫秒自動點擊！');
+          addLog('DOM 監控偵測到「予約手続き」按鈕出現！立即毫秒自動點擊！', 'success');
           btn.click();
           if (btnObserver) {
             btnObserver.disconnect();
@@ -729,7 +884,7 @@
   }
 
   // ==========================================
-  // 8. 初始化入口
+  // 8. 初始化入口與訊息監聽
   // ==========================================
 
   async function loadConfig() {
@@ -755,25 +910,32 @@
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'SETTINGS_UPDATED') {
       config = request.profile;
-      updateHUDDisplay();
-      sendResponse({ success: true });
+      resolvedSessionCd = ''; // 關鍵：重置舊的 Session 代碼，杜絕跨時段錯配！
+      addLog(`[設定更新] 收到新設定: ${config.targetDate} ${config.targetTime}，重置並重新解析 Session...`, 'info');
+      resolveSessionCd().then((newSession) => {
+        updateHUDDisplay();
+        sendResponse({ success: true, resolvedSessionCd: newSession });
+      });
+      return true; // 保持非同步 sendResponse
     }
     return true;
   });
 
   async function init() {
     await loadConfig();
+    addLog(`小幫手 v1.0.2 初始化完成。目標時段: ${config.targetDate} ${config.targetTime}`, 'info');
     createHUD();
     startClock();
 
     if (window.location.pathname.includes('/eventCalendars') || window.location.pathname.includes('/events/view')) {
-      resolveSessionCd();
+      await resolveSessionCd();
       startButtonObserver();
     }
 
     if (window.location.pathname.includes('/orders/add')) {
       updateStatus('success', '🎯 席位已鎖定！擁有 15 分鐘保留期');
       playSuccessChime();
+      addLog('🎉 抵達預約輸入頁面 (orders/add)！請從容填寫資料。', 'success');
 
       const topBanner = document.createElement('div');
       topBanner.style.cssText = `

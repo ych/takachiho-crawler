@@ -270,13 +270,35 @@
       background: #fee2e2;
       color: var(--danger);
     }
+    .btn-preset {
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .btn-preset.active {
+      box-shadow: 0 0 0 2px var(--primary);
+      font-weight: 700 !important;
+    }
+    .mismatch-warning {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
   <header>
     <img src="icons/icon48.png" alt="icon" class="header-icon">
     <div class="header-title">
-      <h1>高千穂峡ボート 極速佔位助手</h1>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <h1>高千穂峡ボート 極速佔位助手</h1>
+        <span style="font-size: 10px; background: #e0f2fe; color: #0284c7; padding: 1px 5px; border-radius: 4px; font-weight: 700;">v1.0.2</span>
+      </div>
       <p>專注於毫秒鎖位 (hold_slot) • 取得 15 分鐘保留期</p>
     </div>
   </header>
@@ -298,9 +320,10 @@
         <button type="button" class="btn-xs" id="btnGoTargetUrl">🌐 開啟此目標網址</button>
       </div>
       <div class="url-actions" style="margin-top: 6px;">
-        <button type="button" class="btn-xs" id="btnPreset1026" style="background: #fef3c7; color: #92400e; border-color: #fde68a;">🧪 帶入 10/26 實測時段 (明天開賣)</button>
-        <button type="button" class="btn-xs" id="btnPreset1107" style="background: #e0f2fe; color: #0369a1; border-color: #bae6fd;">🎯 帶入 11/07 正式搶票</button>
+        <button type="button" class="btn-xs btn-preset" id="btnPreset1026" style="background: #fef3c7; color: #92400e; border-color: #fde68a;">🧪 切換 10/26 實測時段 (點擊自動切換並儲存)</button>
+        <button type="button" class="btn-xs btn-preset" id="btnPreset1107" style="background: #e0f2fe; color: #0369a1; border-color: #bae6fd;">🎯 切換 11/07 正式搶票 (點擊自動切換並儲存)</button>
       </div>
+      <div id="urlMismatchWarning" class="mismatch-warning" style="display: none;"></div>
     </div>
 
     <div class="form-row">
@@ -426,6 +449,20 @@
   <div class="actions">
     <button type="button" class="btn btn-primary" id="btnSave">💾 儲存搶位設定</button>
   </div>
+
+  <!-- 4. 執行日誌與除錯 (支援一鍵匯出寫成 .log 檔案) -->
+  <details style="margin-top: 8px;" open>
+    <summary>📋 執行日誌與除錯 (支援匯出 .log 檔案)</summary>
+    <div style="margin-top: 6px;">
+      <div style="display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap;">
+        <button type="button" class="btn-xs" id="btnDownloadLogs" style="background: #e0f2fe; color: #0369a1; border-color: #bae6fd;">📥 下載 .log 檔案</button>
+        <button type="button" class="btn-xs" id="btnCopyLogs">📋 複製文字</button>
+        <button type="button" class="btn-xs" id="btnRefreshLogs">🔄 重新整理</button>
+        <button type="button" class="btn-xs" id="btnClearLogs">🗑️ 清除</button>
+      </div>
+      <pre id="logContainer" style="background: #0f172a; color: #f8fafc; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 8px; border-radius: 4px; max-height: 140px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;">尚無日誌記錄</pre>
+    </div>
+  </details>
 
   <script src="popup.js"></script>
 </body>
