@@ -1,4 +1,4 @@
-// content.js - Takachiho Gorge Boat Slot-Locking Specialist v1.0.2 (高千穂峡ボート 極速佔位助手)
+// content.js - Takachiho Gorge Boat Slot-Locking Specialist v1.0.3 (高千穂峡ボート 極速佔位助手)
 // 輕量、純淨、零卡頓架構：使用 Shadow DOM 隔離，杜絕 DOM 重繪迴圈與崩潰
 (function () {
   'use strict';
@@ -19,6 +19,9 @@
   let audioCtx = null;
   let burstAttempts = 0;
   const SAFE_MAX_ATTEMPTS = 12; // 最多連發 12 次 (約 3 秒，安全不被封鎖)
+
+  let activeAbortController = null;
+  let statementBtnClicked = false;
 
   let hudHost = null;
   let hudShadow = null;
@@ -79,7 +82,7 @@
     const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     const filename = `takachiho_hud_${dateStr}.log`;
 
-    const content = `==========================================================\nTakachiho Gorge Boat Helper v1.0.2 - HUD Log Export\nURL: ${window.location.href}\nExport Time: ${new Date().toLocaleString()}\n==========================================================\n\n` + lines.join('\n');
+    const content = `==========================================================\nTakachiho Gorge Boat Helper v1.0.3 - HUD Log Export\nURL: ${window.location.href}\nExport Time: ${new Date().toLocaleString()}\n==========================================================\n\n` + lines.join('\n');
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
 
@@ -101,6 +104,13 @@
   function stopAllResources(logMessage = true) {
     isStopped = true;
     isBursting = false;
+
+    if (activeAbortController) {
+      try {
+        activeAbortController.abort();
+      } catch (e) {}
+      activeAbortController = null;
+    }
 
     if (countdownTimer) {
       clearInterval(countdownTimer);
@@ -133,6 +143,7 @@
 
   function resumeAllResources() {
     isStopped = false;
+    statementBtnClicked = false;
     updateStopButtonUI(false);
     updateStatus('waiting', '🟢 重新啟動監控中...');
 
@@ -431,7 +442,7 @@
           <div class="th-header" id="thHeader">
             <div class="th-header-title">
               <span>🛶 高千穂峡ボート 搶位助手</span>
-              <span class="th-version-badge">v1.0.2</span>
+              <span class="th-version-badge">v1.0.3</span>
             </div>
             <button type="button" class="th-toggle-btn" id="thToggleBtn">−</button>
           </div>
@@ -756,10 +767,10 @@
   }
 
   // ==========================================
-  // 6. 精準鎖位引擎 (hold_slot 首發 + 250ms 重試)
+  // 6. 精準鎖位引擎 (hold_slot 首發 + 250ms 重試 + 瞬斷多餘連線)
   // ==========================================
 
-  async function sendHoldSlotRequest(sessionCd, startDt, endDt) {
+  async function sendHoldSlotRequest(sessionCd, startDt, endDt, signal) {
     try {
       const formData = new URLSearchParams();
       formData.append('data[service_cd]', SERVICE_CD);
@@ -773,11 +784,15 @@
           'X-Requested-With': 'XMLHttpRequest',
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
         },
-        body: formData
+        body: formData,
+        signal: signal
       });
 
       return await resp.json();
     } catch (e) {
+      if (e.name === 'AbortError') {
+        return { aborted: true };
+      }
       return { error: e.message };
     }
   }
@@ -786,6 +801,7 @@
     if (isBursting || slotLocked || isStopped) return;
     isBursting = true;
     burstAttempts = 0;
+    statementBtnClicked = false;
 
     if (!resolvedSessionCd) {
       await resolveSessionCd();
@@ -805,23 +821,24 @@
     addLog(`🎯 啟動鎖位！時段: ${startDt}, Session: ${sessionCd.slice(0, 10)}...`, 'info');
     updateStatus('burst', '🎯 精準鎖位中 (首發送出，250ms 安全重送)...');
 
-    const checkAndClickBtn = () => {
-      const btn = document.querySelector('button.order_with_statement');
-      if (btn && btn.offsetParent !== null) {
-        addLog('發現「予約手続き」按鈕！立即觸發點擊！', 'success');
-        btn.click();
-      }
-    };
+    // 建立專屬 AbortController 管理所有連發請求，成功時瞬間中斷未完成請求避免 Session 衝突
+    if (activeAbortController) {
+      try { activeAbortController.abort(); } catch (e) {}
+    }
+    activeAbortController = new AbortController();
+    const abortSignal = activeAbortController.signal;
 
     const doHoldTick = async () => {
       if (slotLocked || isStopped) return;
 
       burstAttempts++;
-      checkAndClickBtn();
-
       updateStatus('burst', `🎯 鎖位請求中 (第 ${burstAttempts} 次)...`);
 
-      const json = await sendHoldSlotRequest(sessionCd, startDt, endDt);
+      const json = await sendHoldSlotRequest(sessionCd, startDt, endDt, abortSignal);
+      if (json && json.aborted) {
+        return; // 已被成功請求終止，靜默略過
+      }
+
       const isOk = json && json.data && String(json.data.result) === '1';
       const msg = (json && json.message && json.message[0]) || (json.error ? `連線錯誤: ${json.error}` : '無訊息');
 
@@ -830,22 +847,39 @@
       if (isOk) {
         slotLocked = true;
         isBursting = false;
-        if (burstInterval) clearInterval(burstInterval);
+        if (burstInterval) {
+          clearInterval(burstInterval);
+          burstInterval = null;
+        }
+
+        // 關鍵修復：立即中斷其他在途並發請求，防止 PHP Session 被重複寫入而導致「入力が無効になりました」
+        if (activeAbortController) {
+          try { activeAbortController.abort(); } catch (e) {}
+          activeAbortController = null;
+        }
+        if (btnObserver) {
+          btnObserver.disconnect();
+          btnObserver = null;
+        }
 
         playSuccessChime();
-        addLog('🎉🎉🎉 席位鎖定成功！取得 15 分鐘保留期！正在跳轉預約頁面...', 'success');
+        addLog('🎉🎉🎉 席位鎖定成功！取得 15 分鐘保留期！已中止其餘在途請求，即將進入預約填寫頁面...', 'success');
         updateStatus('success', '🎉 席位鎖定成功！獲得 15 分鐘保留期！');
 
+        // 保留 200ms 讓後端 Session 寫入穩定，避免競態導航
         setTimeout(() => {
           const orderUrl = `/takachiho1/orders/add?service_cd=${encodeURIComponent(SERVICE_CD)}&service_session_cd=${encodeURIComponent(sessionCd)}&service_start_datetime=${encodeURIComponent(startDt)}&service_end_datetime=${encodeURIComponent(endDt)}`;
           window.location.href = orderUrl;
-        }, 300);
+        }, 200);
         return;
       }
 
       if (burstAttempts >= SAFE_MAX_ATTEMPTS) {
         isBursting = false;
-        if (burstInterval) clearInterval(burstInterval);
+        if (burstInterval) {
+          clearInterval(burstInterval);
+          burstInterval = null;
+        }
         addLog(`已完成 ${SAFE_MAX_ATTEMPTS} 次嘗試，終止連發。最後訊息: ${msg}`, 'warn');
         updateStatus('waiting', `⚠️ ${msg}`);
       }
@@ -856,7 +890,7 @@
   }
 
   // ==========================================
-  // 7. 輕量按鈕監控
+  // 7. 輕量按鈕監控 (嚴格單次防呆，避開 API burst 衝突)
   // ==========================================
 
   function startButtonObserver() {
@@ -866,11 +900,13 @@
     if (!targetContainer) return;
 
     btnObserver = new MutationObserver(() => {
-      if (isStopped || slotLocked) return;
-      if (config && config.autoClickStatement) {
+      if (isStopped || slotLocked || statementBtnClicked) return;
+      // 若正在進行 API burst 鎖位，不觸發 HTML 按鈕以防表單重複提交造成 Session BlackHole
+      if (config && config.autoClickStatement && !isBursting) {
         const btn = document.querySelector('button.order_with_statement');
         if (btn && btn.offsetParent !== null) {
-          addLog('DOM 監控偵測到「予約手続き」按鈕出現！立即毫秒自動點擊！', 'success');
+          statementBtnClicked = true;
+          addLog('DOM 監控偵測到「予約手続き」按鈕出現！立即單次點擊進入預約流程！', 'success');
           btn.click();
           if (btnObserver) {
             btnObserver.disconnect();
@@ -921,9 +957,73 @@
     return true;
   });
 
+  function handleOrdersAddPage() {
+    let handled = false;
+    const checkErrorAndRecover = () => {
+      if (handled) return;
+      const pageText = document.body ? document.body.innerText : '';
+      const hasSessionError = pageText.includes('入力が無効になりました') || 
+                              pageText.includes('最初からやり直してください') ||
+                              pageText.includes('この画面からは予約ができません');
+
+      if (hasSessionError) {
+        handled = true;
+        const reloadCount = parseInt(sessionStorage.getItem('takachiho_auto_reload_attempt') || '0', 10);
+        if (reloadCount < 2) {
+          sessionStorage.setItem('takachiho_auto_reload_attempt', String(reloadCount + 1));
+          addLog(`⚠️ 偵測到伺服器暫態 Session 衝突提示（入力が無効になりました），席位保留依然有效！正在自動重新整理修復表單 (第 ${reloadCount + 1}/2 次)...`, 'warn');
+
+          const fixBanner = document.createElement('div');
+          fixBanner.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
+            background: #fef08a; border-bottom: 2px solid #eab308; color: #854d0e;
+            padding: 12px 20px; font-weight: 700; font-size: 15px; text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          `;
+          fixBanner.innerHTML = `🔄 偵測到伺服器暫態 Session 訊號，席位保留依然有效！小幫手正在為您自動重整載入預約表單，請稍候...`;
+          document.body.prepend(fixBanner);
+
+          setTimeout(() => {
+            window.location.reload();
+          }, 600);
+        } else {
+          addLog('已嘗試自動重整 2 次仍顯示無效，停止自動重整以避免循環。請確認席位狀態。', 'error');
+        }
+        return true;
+      }
+      return false;
+    };
+
+    if (checkErrorAndRecover()) return;
+
+    // 表單載入正常，清除重試計數器
+    sessionStorage.removeItem('takachiho_auto_reload_attempt');
+    updateStatus('success', '🎯 席位已鎖定！擁有 15 分鐘保留期');
+    playSuccessChime();
+    addLog('🎉 抵達預約輸入頁面 (orders/add)！請從容填寫資料。', 'success');
+
+    if (!document.getElementById('takachiho-success-banner')) {
+      const topBanner = document.createElement('div');
+      topBanner.id = 'takachiho-success-banner';
+      topBanner.style.cssText = `
+        background: #dcfce7; border-bottom: 2px solid #86efac; color: #166534;
+        padding: 10px 16px; font-weight: 700; font-size: 14px; text-align: center;
+      `;
+      topBanner.innerHTML = `🎉 恭喜！席位已為您鎖定保留 15 分鐘（剩餘時間見下方計時）！請在下方從容填妥代表者與信用卡資料即可。`;
+      document.body.prepend(topBanner);
+    }
+
+    // 備用觀察器：若 3 秒內頁面動態插入錯誤提示，即時補救重整
+    const orderObs = new MutationObserver(() => {
+      checkErrorAndRecover();
+    });
+    orderObs.observe(document.body, { childList: true, subtree: true });
+    setTimeout(() => orderObs.disconnect(), 3000);
+  }
+
   async function init() {
     await loadConfig();
-    addLog(`小幫手 v1.0.2 初始化完成。目標時段: ${config.targetDate} ${config.targetTime}`, 'info');
+    addLog(`小幫手 v1.0.3 初始化完成。目標時段: ${config.targetDate} ${config.targetTime}`, 'info');
     createHUD();
     startClock();
 
@@ -933,17 +1033,7 @@
     }
 
     if (window.location.pathname.includes('/orders/add')) {
-      updateStatus('success', '🎯 席位已鎖定！擁有 15 分鐘保留期');
-      playSuccessChime();
-      addLog('🎉 抵達預約輸入頁面 (orders/add)！請從容填寫資料。', 'success');
-
-      const topBanner = document.createElement('div');
-      topBanner.style.cssText = `
-        background: #dcfce7; border-bottom: 2px solid #86efac; color: #166534;
-        padding: 10px 16px; font-weight: 700; font-size: 14px; text-align: center;
-      `;
-      topBanner.innerHTML = `🎉 恭喜！席位已為您鎖定保留 15 分鐘（剩餘時間見下方計時）！請在下方從容填妥代表者與信用卡資料即可。`;
-      document.body.prepend(topBanner);
+      handleOrdersAddPage();
     }
   }
 

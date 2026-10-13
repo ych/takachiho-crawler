@@ -1,4 +1,4 @@
-// popup.js - Takachiho Helper Settings Controller v1.0.2
+// popup.js - Takachiho Helper Settings Controller v1.0.3
 
 const STORAGE_KEY = 'takachiho_booking_profile';
 const LOGS_STORAGE_KEY = 'takachiho_recent_logs';
@@ -115,7 +115,7 @@ function downloadLogFile() {
     const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     const filename = `takachiho_helper_${dateStr}.log`;
 
-    const content = `==========================================================\nTakachiho Gorge Boat Helper v1.0.2 - Debug Log Export\nExport Time: ${new Date().toLocaleString()}\n==========================================================\n\n` + lines.join('\n');
+    const content = `==========================================================\nTakachiho Gorge Boat Helper v1.0.3 - Debug Log Export\nExport Time: ${new Date().toLocaleString()}\n==========================================================\n\n` + lines.join('\n');
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
 
