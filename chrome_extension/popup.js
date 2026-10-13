@@ -9,7 +9,7 @@ const DEFAULT_SETTINGS = {
   targetTime: '08:30:00',
   launchBaseTime: '08:00:00',
   earlyBufferMs: '15', // 提前 15ms (07:59:59.985 - 預計於 08:00:00.005 抵達伺服器)
-  adultCount: '2',
+  adultCount: '3', // 預設 3 名大人 (可進入頁面後自由切換)
   childCount: '0',
   autoHold: true,
   autoClickStatement: true,
@@ -28,6 +28,10 @@ const URL_1107 = 'https://eipro.jp/takachiho1/events/view/EV00000007?closable=1&
 
 // UI Elements
 const els = {
+  cardTargetText: document.getElementById('cardTargetText'),
+  cardLaunchText: document.getElementById('cardLaunchText'),
+  btnMissionGo: document.getElementById('btnMissionGo'),
+
   targetUrl: document.getElementById('targetUrl'),
   btnUseCurrentUrl: document.getElementById('btnUseCurrentUrl'),
   btnGoTargetUrl: document.getElementById('btnGoTargetUrl'),
@@ -41,6 +45,9 @@ const els = {
   childCount: document.getElementById('childCount'),
 
   launchBaseTime: document.getElementById('launchBaseTime'),
+  btnLaunch0800: document.getElementById('btnLaunch0800'),
+  btnLaunch0815: document.getElementById('btnLaunch0815'),
+  btnLaunch0830: document.getElementById('btnLaunch0830'),
   earlyBufferMs: document.getElementById('earlyBufferMs'),
   triggerPreview: document.getElementById('triggerPreview'),
 
@@ -237,10 +244,33 @@ function updateTriggerPreview() {
   const baseTime = els.launchBaseTime.value.trim() || '08:00:00';
   const bufferMs = els.earlyBufferMs.value;
   const triggerStr = calculateTriggerTime(baseTime, bufferMs);
-  els.triggerPreview.textContent = `🎯 首發發動時間：${triggerStr}（提前 ${bufferMs}ms 命中開賣瞬間，未開則 250ms 安全重試）`;
+  els.triggerPreview.textContent = `🎯 首發發動時間：${triggerStr}（提前 ${bufferMs}ms 命中開賣瞬間，未開則 250ms 安全重送）`;
+  updateMissionCard(baseTime, triggerStr);
 }
 
-els.launchBaseTime.addEventListener('input', updateTriggerPreview);
+function updateMissionCard(baseTime, triggerStr) {
+  if (els.cardTargetText) {
+    const d = els.targetDate ? els.targetDate.value.trim() || '2026/11/07' : '2026/11/07';
+    const t = els.targetTime ? els.targetTime.value.slice(0, 5) || '08:30' : '08:30';
+    const count = els.adultCount ? els.adultCount.value || '3' : '3';
+    els.cardTargetText.textContent = `${d} ${t} (${count} 名)`;
+  }
+  if (els.cardLaunchText) {
+    const bt = baseTime || (els.launchBaseTime ? els.launchBaseTime.value.trim() : '08:00:00') || '08:00:00';
+    const trig = triggerStr || calculateTriggerTime(bt, els.earlyBufferMs.value);
+    els.cardLaunchText.textContent = `${bt} (首發 ${trig})`;
+  }
+
+  // 更新快捷時段按鈕選取狀態 (08:00 / 08:15 / 08:30)
+  const currentBase = baseTime || (els.launchBaseTime ? els.launchBaseTime.value.trim() : '08:00:00');
+  if (els.btnLaunch0800) els.btnLaunch0800.classList.toggle('active', currentBase === '08:00:00');
+  if (els.btnLaunch0815) els.btnLaunch0815.classList.toggle('active', currentBase === '08:15:00');
+  if (els.btnLaunch0830) els.btnLaunch0830.classList.toggle('active', currentBase === '08:30:00');
+}
+
+els.launchBaseTime.addEventListener('input', () => {
+  updateTriggerPreview();
+});
 els.earlyBufferMs.addEventListener('change', updateTriggerPreview);
 
 // ==========================================
@@ -254,7 +284,7 @@ function loadSettings() {
     els.targetUrl.value = data.targetUrl || DEFAULT_SETTINGS.targetUrl;
     els.targetDate.value = data.targetDate || DEFAULT_SETTINGS.targetDate;
     els.targetTime.value = data.targetTime || DEFAULT_SETTINGS.targetTime;
-    els.adultCount.value = data.adultCount || '2';
+    els.adultCount.value = data.adultCount || '3';
     els.childCount.value = data.childCount || '0';
 
     els.launchBaseTime.value = data.launchBaseTime || DEFAULT_SETTINGS.launchBaseTime;
@@ -355,10 +385,44 @@ if (els.btnPreset1107) {
   });
 }
 
+// 快捷開賣時間按鈕 (08:00 / 08:15 / 08:30)
+[els.btnLaunch0800, els.btnLaunch0815, els.btnLaunch0830].forEach((btn) => {
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const timeVal = btn.getAttribute('data-time');
+    els.launchBaseTime.value = timeVal;
+    updateTriggerPreview();
+    appendLog(`[開賣時間] 切換至 ${timeVal}，自動儲存並同步至分頁`, 'info');
+    saveSettings(true);
+  });
+});
+
+// 頂部任務卡「一鍵直達活動頁面」
+if (els.btnMissionGo) {
+  els.btnMissionGo.addEventListener('click', () => {
+    saveSettings(true);
+    els.btnGoTargetUrl.click();
+  });
+}
+
+// 變更人數或時段時同步更新任務卡
+if (els.adultCount) {
+  els.adultCount.addEventListener('change', () => {
+    updateMissionCard();
+    saveSettings(true);
+  });
+}
+
 // 手動變更輸入時即時防呆校驗
-els.targetDate.addEventListener('input', checkDateConsistency);
+els.targetDate.addEventListener('input', () => {
+  updateMissionCard();
+  checkDateConsistency();
+});
 els.targetUrl.addEventListener('input', checkDateConsistency);
-els.targetTime.addEventListener('change', checkDateConsistency);
+els.targetTime.addEventListener('change', () => {
+  updateMissionCard();
+  checkDateConsistency();
+});
 
 // Use current active tab URL
 els.btnUseCurrentUrl.addEventListener('click', () => {

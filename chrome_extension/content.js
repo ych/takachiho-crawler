@@ -351,6 +351,17 @@
           border-radius: 4px;
           border: 1px solid #e2e8f0;
         }
+        .th-countdown {
+          text-align: center;
+          font-size: 11px;
+          font-weight: 700;
+          color: #92400e;
+          background: #fef3c7;
+          border: 1px solid #fde68a;
+          padding: 4px 6px;
+          border-radius: 4px;
+          transition: all 0.2s ease;
+        }
         .th-actions {
           display: flex;
           flex-direction: column;
@@ -461,6 +472,7 @@
             </div>
 
             <div class="th-clock" id="hudClock">00:00:00.000</div>
+            <div class="th-countdown" id="hudCountdown">⏳ 計算開賣倒數中...</div>
 
             <div class="th-status-badge waiting" id="hudStatusBadge">
               <span id="hudStatusIcon">🟢</span>
@@ -546,7 +558,7 @@
       targetTextEl.textContent = `${config.targetDate} ${config.targetTime.slice(0, 5)}`;
     }
     if (launchTextEl) {
-      launchTextEl.textContent = `${config.launchTime || '07:59:59.985'} (提前 ${config.earlyBufferMs || 15}ms)`;
+      launchTextEl.textContent = `${config.launchBaseTime || '08:00:00'} (首發 ${config.launchTime || '07:59:59.985'})`;
     }
     if (sessionCdEl) {
       sessionCdEl.textContent = resolvedSessionCd ? `${resolvedSessionCd.slice(0, 13)}...` : '解析中...';
@@ -572,8 +584,81 @@
   }
 
   // ==========================================
-  // 4. 時鐘與觸發器 (50ms 溫和定時，低負載)
+  // 4. 時鐘與觸發器 (支援任意開賣時段、大字倒數與狙擊)
   // ==========================================
+
+  function calculateMaxTriggerTime(baseTimeStr) {
+    try {
+      const parts = (baseTimeStr || '08:00:00').split(':');
+      let h = parseInt(parts[0], 10) || 8;
+      let m = parseInt(parts[1], 10) || 0;
+      let s = parseInt(parts[2], 10) || 0;
+      let totalSec = (h * 3600 + m * 60 + s + 10) % 86400;
+      const resH = Math.floor(totalSec / 3600);
+      const resM = Math.floor((totalSec % 3600) / 60);
+      const resS = totalSec % 60;
+      const pad = (n, len = 2) => String(n).padStart(len, '0');
+      return `${pad(resH)}:${pad(resM)}:${pad(resS)}.000`;
+    } catch (e) {
+      return '23:59:59.000';
+    }
+  }
+
+  function updateHUDCountdown(now) {
+    if (!hudShadow || !config) return;
+    const cdEl = hudShadow.getElementById('hudCountdown');
+    if (!cdEl) return;
+
+    if (slotLocked) {
+      cdEl.textContent = '🎉 席位已鎖定 (15 分鐘保留期有效中)';
+      cdEl.style.background = '#dcfce7';
+      cdEl.style.color = '#166534';
+      return;
+    }
+
+    if (isBursting) {
+      cdEl.textContent = `🚀 鎖位引擎連發中 (第 ${burstAttempts} 次)...`;
+      cdEl.style.background = '#fee2e2';
+      cdEl.style.color = '#991b1b';
+      return;
+    }
+
+    const baseTimeStr = config.launchBaseTime || '08:00:00';
+    const parts = baseTimeStr.split(':');
+    const targetH = parseInt(parts[0], 10) || 8;
+    const targetM = parseInt(parts[1], 10) || 0;
+    const targetS = parseInt(parts[2], 10) || 0;
+
+    const targetDateObj = new Date(now);
+    targetDateObj.setHours(targetH, targetM, targetS, 0);
+
+    const diffMs = targetDateObj.getTime() - now.getTime();
+
+    if (diffMs > 0) {
+      const diffSec = Math.floor(diffMs / 1000);
+      const m = Math.floor(diffSec / 60);
+      const s = diffSec % 60;
+      const pad = (n) => String(n).padStart(2, '0');
+
+      if (diffSec <= 10) {
+        cdEl.textContent = `🔥 即將發射！倒數 ${diffSec} 秒 (${baseTimeStr} 開賣)`;
+        cdEl.style.background = '#fee2e2';
+        cdEl.style.color = '#dc2626';
+      } else {
+        cdEl.textContent = `⏳ 距 ${baseTimeStr} 開賣倒數：${pad(m)} 分 ${pad(s)} 秒`;
+        cdEl.style.background = '#fef3c7';
+        cdEl.style.color = '#92400e';
+      }
+    } else if (diffMs >= -10000) {
+      cdEl.textContent = `🎯 開賣發動中 (${baseTimeStr})`;
+      cdEl.style.background = '#fee2e2';
+      cdEl.style.color = '#991b1b';
+    } else {
+      cdEl.textContent = `ℹ️ 已過 ${baseTimeStr} (可點下方一鍵立即搶位)`;
+      cdEl.style.background = '#f1f5f9';
+      cdEl.style.color = '#475569';
+    }
+  }
 
   function startClock() {
     if (countdownTimer) clearInterval(countdownTimer);
@@ -593,10 +678,15 @@
         }
       }
 
-      // 開賣觸發 (僅在 07:59:59.985 ~ 08:00:10.000 之間發動)
+      updateHUDCountdown(now);
+
+      // 開賣觸發 (支援任意開賣時間如 08:00, 08:15, 08:30 等，在發動時間 ~ 發動後 10 秒區間觸發)
       if (config && config.autoHold && !isBursting && !slotLocked && !window.location.pathname.includes('/orders/add')) {
         const targetLaunchStr = config.launchTime || '07:59:59.985';
-        if (timeStr >= targetLaunchStr && timeStr <= '08:00:10.000') {
+        const baseTimeStr = config.launchBaseTime || '08:00:00';
+        const maxTriggerStr = calculateMaxTriggerTime(baseTimeStr);
+
+        if (timeStr >= targetLaunchStr && timeStr <= maxTriggerStr) {
           addLog(`達到開賣預定發動時間 (${timeStr})！立即啟動精準鎖位 (Burst Hold)...`, 'info');
           startBurstHold(false);
         }
@@ -933,7 +1023,7 @@
           launchBaseTime: '08:00:00',
           earlyBufferMs: '15',
           launchTime: '07:59:59.985',
-          adultCount: '2',
+          adultCount: '3',
           childCount: '0',
           autoHold: true,
           autoClickStatement: true
@@ -947,7 +1037,7 @@
     if (request.action === 'SETTINGS_UPDATED') {
       config = request.profile;
       resolvedSessionCd = ''; // 關鍵：重置舊的 Session 代碼，杜絕跨時段錯配！
-      addLog(`[設定更新] 收到新設定: ${config.targetDate} ${config.targetTime}，重置並重新解析 Session...`, 'info');
+      addLog(`[設定更新] 收到新設定: ${config.targetDate} ${config.targetTime} (開賣 ${config.launchBaseTime || '08:00:00'})，重置並重新解析 Session...`, 'info');
       resolveSessionCd().then((newSession) => {
         updateHUDDisplay();
         sendResponse({ success: true, resolvedSessionCd: newSession });
@@ -956,6 +1046,37 @@
     }
     return true;
   });
+
+  function checkAndShowCalendarGuide() {
+    if (window.location.pathname.includes('/eventCalendars')) {
+      if (document.getElementById('takachiho-calendar-guide')) return;
+      const guide = document.createElement('div');
+      guide.id = 'takachiho-calendar-guide';
+      guide.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; z-index: 2147483646;
+        background: #0284c7; color: #fff; padding: 10px 16px;
+        font-size: 13px; font-weight: 700; text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.15); display: flex;
+        align-items: center; justify-content: center; gap: 10px;
+      `;
+      guide.innerHTML = `
+        <span>🛶 小幫手提示：您目前在日曆總覽頁。為達到毫秒極速鎖位，請前往專屬目標活動頁面！</span>
+        <button type="button" id="btnGoTargetActivity" style="
+          background: #fff; color: #0284c7; border: none; padding: 4px 12px;
+          border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 12px;
+        ">🚀 一鍵直達 ${config ? config.targetDate : ''} 搶位活動頁</button>
+      `;
+      document.body.prepend(guide);
+      const btn = document.getElementById('btnGoTargetActivity');
+      if (btn) {
+        btn.addEventListener('click', () => {
+          if (config && config.targetUrl) {
+            window.location.href = config.targetUrl;
+          }
+        });
+      }
+    }
+  }
 
   function handleOrdersAddPage() {
     let handled = false;
@@ -1002,6 +1123,16 @@
     playSuccessChime();
     addLog('🎉 抵達預約輸入頁面 (orders/add)！請從容填寫資料。', 'success');
 
+    // 自動選取大人人數為 3 名 (若頁面有該選單)
+    try {
+      const adultSelect = document.querySelector('select[name*="adult_count"], select#OrderDetailAdultCount, select[data-field_name*="adult_count"], select[data-field_name="OrderDetail.adult_count"]');
+      if (adultSelect && config && config.adultCount) {
+        adultSelect.value = String(config.adultCount);
+        adultSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        addLog(`[表單自動選取] 大人人數已預設選為: ${config.adultCount} 名 (可手動自由修改)`, 'info');
+      }
+    } catch (e) {}
+
     if (!document.getElementById('takachiho-success-banner')) {
       const topBanner = document.createElement('div');
       topBanner.id = 'takachiho-success-banner';
@@ -1009,7 +1140,7 @@
         background: #dcfce7; border-bottom: 2px solid #86efac; color: #166534;
         padding: 10px 16px; font-weight: 700; font-size: 14px; text-align: center;
       `;
-      topBanner.innerHTML = `🎉 恭喜！席位已為您鎖定保留 15 分鐘（剩餘時間見下方計時）！請在下方從容填妥代表者與信用卡資料即可。`;
+      topBanner.innerHTML = `🎉 恭喜！席位已為您鎖定保留 15 分鐘（剩餘時間見下方計時）！大人人數已預設選為 ${config ? config.adultCount : 3} 名（可在下方自由更換）。請從容填妥代表者與信用卡資料即可。`;
       document.body.prepend(topBanner);
     }
 
@@ -1023,11 +1154,12 @@
 
   async function init() {
     await loadConfig();
-    addLog(`小幫手 v1.0.3 初始化完成。目標時段: ${config.targetDate} ${config.targetTime}`, 'info');
+    addLog(`小幫手 v1.0.3 初始化完成。目標時段: ${config.targetDate} ${config.targetTime} (開賣 ${config.launchBaseTime || '08:00:00'})`, 'info');
     createHUD();
     startClock();
 
     if (window.location.pathname.includes('/eventCalendars') || window.location.pathname.includes('/events/view')) {
+      checkAndShowCalendarGuide();
       await resolveSessionCd();
       startButtonObserver();
     }

@@ -170,6 +170,12 @@
     .btn-xs:hover {
       background: #e2e8f0;
     }
+    .btn-xs.active {
+      background: #0284c7 !important;
+      color: #fff !important;
+      border-color: #0284c7 !important;
+      font-weight: 700;
+    }
 
     .trigger-preview {
       background: #fefce8;
@@ -303,6 +309,23 @@
     </div>
   </header>
 
+  <!-- 頂部任務就緒卡：最直覺的開始方式 -->
+  <div class="mission-ready-card" style="background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; padding: 12px; border-radius: var(--radius); margin-bottom: 10px; box-shadow: 0 4px 10px rgba(2, 132, 199, 0.25);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+      <div style="font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 5px;">
+        <span>🎯 當前預約任務</span>
+      </div>
+      <span style="font-size: 11px; background: rgba(255,255,255,0.22); padding: 2px 8px; border-radius: 10px; font-weight: 700;">🟢 已就緒</span>
+    </div>
+    <div style="font-size: 12px; opacity: 0.95; line-height: 1.5; margin-bottom: 10px;">
+      📅 目標船班：<strong id="cardTargetText">2026/11/07 08:30 (3 名)</strong><br>
+      ⏰ 開賣時段：<strong id="cardLaunchText">08:00:00 (首發 07:59:59.985)</strong>
+    </div>
+    <button type="button" id="btnMissionGo" style="width: 100%; height: 34px; background: #fff; color: #0284c7; border: none; border-radius: 5px; font-weight: 700; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.15); transition: background 0.15s;">
+      🚀 一鍵直達預約活動頁面 (自動就緒)
+    </button>
+  </div>
+
   <div class="mission-banner">
     <strong>🎯 唯一核心目標：搶下席位 (仮押さえ)！</strong>
     只要搶先鎖定席位，系統將為您獨占保留整整 15 分鐘！後續資料輸入由您在桌面上從容填寫即可。
@@ -357,11 +380,11 @@
 
     <div class="form-row">
       <div class="form-group">
-        <label for="adultCount" class="required">大人人數 (上限3)</label>
+        <label for="adultCount" class="required">大人人數 (上限3，進頁面後亦可自由改)</label>
         <select id="adultCount">
           <option value="1">1 名</option>
-          <option value="2" selected>2 名</option>
-          <option value="3">3 名</option>
+          <option value="2">2 名</option>
+          <option value="3" selected>3 名 (預設)</option>
         </select>
       </div>
       <div class="form-group">
@@ -372,6 +395,9 @@
         </select>
       </div>
     </div>
+    <div style="font-size: 11px; color: var(--text-muted); margin-top: -2px; margin-bottom: 4px;">
+      💡 提示：搶票第一步是搶下「整艘船」（API 不帶人數）。進入預約頁面後有 15 分鐘保留期，您隨時可以在畫面上自由更換人數！
+    </div>
   </div>
 
   <!-- 2. 極速波浪搶位設定 (核心引擎) -->
@@ -381,7 +407,7 @@
     <div class="form-row">
       <div class="form-group" style="flex: 1.2;">
         <label for="launchBaseTime" class="required">開賣時間 (台灣)</label>
-        <input type="text" id="launchBaseTime" value="08:00:00" placeholder="08:00:00">
+        <input type="text" id="launchBaseTime" value="08:00:00" placeholder="08:00:00 (可輸入任意時間)">
       </div>
       <div class="form-group" style="flex: 1.5;">
         <label for="earlyBufferMs" class="required">提前發送時間 (精準抵達)</label>
@@ -393,6 +419,16 @@
           <option value="100">提前 100 毫秒 (07:59:59.900)</option>
           <option value="200">提前 200 毫秒 (07:59:59.800)</option>
         </select>
+      </div>
+    </div>
+
+    <!-- 快捷開賣時段選取 (包含 8:15 釋出撿漏) -->
+    <div style="margin-top: 4px; margin-bottom: 6px;">
+      <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 3px; display: block;">⚡ 快捷開賣時段切換 (亦可在上方自由輸入任意時間)：</label>
+      <div style="display: flex; gap: 5px;">
+        <button type="button" class="btn-xs time-chip active" id="btnLaunch0800" data-time="08:00:00">🕗 08:00 首波開賣</button>
+        <button type="button" class="btn-xs time-chip" id="btnLaunch0815" data-time="08:15:00">🕣 08:15 釋出撿漏 🎯</button>
+        <button type="button" class="btn-xs time-chip" id="btnLaunch0830" data-time="08:30:00">🕤 08:30 次輪釋出</button>
       </div>
     </div>
 
