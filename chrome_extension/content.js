@@ -101,7 +101,7 @@
   // 1. 資源釋放與生命週期控制 (Stop & Resume)
   // ==========================================
 
-  function stopAllResources(logMessage = true) {
+  function stopAllResources(logMessage = true, persistStorage = false) {
     isStopped = true;
     isBursting = false;
 
@@ -136,14 +136,35 @@
     updateStatus('stopped', '⏹️ 已停止所有排程，所有資源均已釋放');
     updateStopButtonUI(true);
 
+    if (hudShadow) {
+      const cdEl = hudShadow.getElementById('hudCountdown');
+      if (cdEl && !slotLocked) {
+        cdEl.textContent = '⏹️ 搶位監控已停止 (點擊下方「啟動搶位」)';
+        cdEl.style.background = '#f3f4f6';
+        cdEl.style.color = '#6b7280';
+      }
+    }
+
     if (logMessage) {
       addLog('🛑 已手動停止搶位，所有 Timer、Observer、Audio 資源均已成功釋放！', 'warn');
     }
+
+    if (persistStorage && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      if (config) config.autoHold = false;
+      chrome.storage.local.get([STORAGE_KEY], (res) => {
+        const current = res[STORAGE_KEY] || {};
+        current.autoHold = false;
+        chrome.storage.local.set({ [STORAGE_KEY]: current }, () => {
+          addLog('💾 已全域儲存「停止搶位」狀態（新開分頁或重新整理將嚴格維持停止狀態）', 'info');
+        });
+      });
+    }
   }
 
-  function resumeAllResources() {
+  function resumeAllResources(persistStorage = false) {
     isStopped = false;
     statementBtnClicked = false;
+    if (config) config.autoHold = true;
     updateStopButtonUI(false);
     updateStatus('waiting', '🟢 重新啟動監控中...');
 
@@ -152,6 +173,16 @@
     resolveSessionCd();
 
     addLog('▶️ 已重新啟動搶位監控！', 'info');
+
+    if (persistStorage && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get([STORAGE_KEY], (res) => {
+        const current = res[STORAGE_KEY] || {};
+        current.autoHold = true;
+        chrome.storage.local.set({ [STORAGE_KEY]: current }, () => {
+          addLog('💾 已全域儲存「啟動搶位」狀態（所有分頁同步就緒倒數）', 'info');
+        });
+      });
+    }
   }
 
   function updateStopButtonUI(isCurrentlyStopped) {
@@ -160,7 +191,7 @@
     if (!btn) return;
 
     if (isCurrentlyStopped) {
-      btn.textContent = '▶️ 重新啟動監控';
+      btn.textContent = '▶️ 啟動搶位監控';
       btn.className = 'th-btn th-btn-resume';
     } else {
       btn.textContent = '🛑 停止搶位並釋放資源';
@@ -521,17 +552,17 @@
     });
 
     hudShadow.getElementById('btnManualHold').addEventListener('click', () => {
-      if (isStopped) {
-        resumeAllResources();
+      if (isStopped || (config && config.autoHold === false)) {
+        resumeAllResources(true);
       }
       startBurstHold(true);
     });
 
     hudShadow.getElementById('btnToggleStop').addEventListener('click', () => {
-      if (isStopped) {
-        resumeAllResources();
+      if (isStopped || (config && config.autoHold === false)) {
+        resumeAllResources(true);
       } else {
-        stopAllResources(true);
+        stopAllResources(true, true);
       }
     });
 
@@ -563,6 +594,20 @@
     if (sessionCdEl) {
       sessionCdEl.textContent = resolvedSessionCd ? `${resolvedSessionCd.slice(0, 13)}...` : '解析中...';
       sessionCdEl.title = resolvedSessionCd || '未解析';
+    }
+
+    const isArmed = !isStopped && config.autoHold !== false;
+    if (!isArmed && !slotLocked) {
+      updateStatus('stopped', '⏹️ 已停止所有排程，所有資源均已釋放');
+      updateStopButtonUI(true);
+      const cdEl = hudShadow.getElementById('hudCountdown');
+      if (cdEl) {
+        cdEl.textContent = '⏹️ 搶位監控已停止 (點擊下方「啟動搶位」)';
+        cdEl.style.background = '#f3f4f6';
+        cdEl.style.color = '#6b7280';
+      }
+    } else if (isArmed && !isBursting && !slotLocked) {
+      updateStopButtonUI(false);
     }
   }
 
@@ -613,6 +658,13 @@
       cdEl.textContent = '🎉 席位已鎖定 (15 分鐘保留期有效中)';
       cdEl.style.background = '#dcfce7';
       cdEl.style.color = '#166534';
+      return;
+    }
+
+    if (isStopped || (config && config.autoHold === false)) {
+      cdEl.textContent = '⏹️ 搶位監控已停止 (點擊下方「啟動搶位」)';
+      cdEl.style.background = '#f3f4f6';
+      cdEl.style.color = '#6b7280';
       return;
     }
 
@@ -839,12 +891,9 @@
       addLog(`Search API 解析失敗: ${e.message}`, 'warn');
     }
 
-    // 4. 若仍未解析，依日期進行預備代碼回退防呆
+    // 4. 若仍未解析，依目標日期 (11/07) 進行預備代碼回退防呆
     if (!resolvedSessionCd) {
-      if (config.targetDate === '2026/10/26') {
-        resolvedSessionCd = '68a914cc-b08c-4413-94a1-9dd8c0a8018d';
-        addLog(`[預備代碼] 自動帶入 10/26 專屬預備 Session CD: ${resolvedSessionCd.slice(0, 10)}...`, 'info');
-      } else if (config.targetDate === '2026/11/07') {
+      if (config.targetDate === '2026/11/07') {
         resolvedSessionCd = '68a916a6-59c8-459d-9643-a231c0a8018d';
         addLog(`[預備代碼] 自動帶入 11/07 專屬預備 Session CD: ${resolvedSessionCd.slice(0, 10)}...`, 'info');
       } else {
@@ -1037,7 +1086,14 @@
     if (request.action === 'SETTINGS_UPDATED') {
       config = request.profile;
       resolvedSessionCd = ''; // 關鍵：重置舊的 Session 代碼，杜絕跨時段錯配！
-      addLog(`[設定更新] 收到新設定: ${config.targetDate} ${config.targetTime} (開賣 ${config.launchBaseTime || '08:00:00'})，重置並重新解析 Session...`, 'info');
+      addLog(`[設定更新] 收到新設定: ${config.targetDate} ${config.targetTime} (開賣 ${config.launchBaseTime || '08:00:00'}, 狀態: ${config.autoHold !== false ? '啟動' : '停止'})，重新解析 Session...`, 'info');
+
+      if (config.autoHold === false) {
+        if (!isStopped) stopAllResources(false, false);
+      } else {
+        if (isStopped) resumeAllResources(false);
+      }
+
       resolveSessionCd().then((newSession) => {
         updateHUDDisplay();
         sendResponse({ success: true, resolvedSessionCd: newSession });
@@ -1046,6 +1102,28 @@
     }
     return true;
   });
+
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName === 'local' && changes[STORAGE_KEY]) {
+        const newProfile = changes[STORAGE_KEY].newValue;
+        if (!newProfile) return;
+        config = newProfile;
+        if (config.autoHold === false) {
+          if (!isStopped) {
+            stopAllResources(false, false);
+            addLog('⏹️ 收到全域停止指令（其他分頁或彈出視窗已關閉監控）', 'warn');
+          }
+        } else {
+          if (isStopped) {
+            resumeAllResources(false);
+            addLog('▶️ 收到全域啟動指令（其他分頁或彈出視窗已啟動監控）', 'info');
+          }
+        }
+        updateHUDDisplay();
+      }
+    });
+  }
 
   function checkAndShowCalendarGuide() {
     if (window.location.pathname.includes('/eventCalendars')) {
@@ -1154,14 +1232,23 @@
 
   async function init() {
     await loadConfig();
-    addLog(`小幫手 v1.0.3 初始化完成。目標時段: ${config.targetDate} ${config.targetTime} (開賣 ${config.launchBaseTime || '08:00:00'})`, 'info');
+    const isMasterArmed = config && config.autoHold !== false;
+
+    addLog(`小幫手 v1.0.3 初始化完成。狀態: ${isMasterArmed ? '🟢 監控啟動中' : '⏹️ 已停止監控'}, 目標時段: ${config.targetDate} ${config.targetTime} (開賣 ${config.launchBaseTime || '08:00:00'})`, 'info');
     createHUD();
-    startClock();
+
+    if (!isMasterArmed) {
+      stopAllResources(false, false);
+    } else {
+      startClock();
+    }
 
     if (window.location.pathname.includes('/eventCalendars') || window.location.pathname.includes('/events/view')) {
       checkAndShowCalendarGuide();
       await resolveSessionCd();
-      startButtonObserver();
+      if (isMasterArmed) {
+        startButtonObserver();
+      }
     }
 
     if (window.location.pathname.includes('/orders/add')) {

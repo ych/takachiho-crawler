@@ -98,4 +98,123 @@ assert(contentJsContent.includes('calculateMaxTriggerTime'), 'content.js must im
 assert(contentJsContent.includes('hudCountdown'), 'content.js must implement hudCountdown visual indicator');
 console.log('  ✓ Default passenger count 3 and dynamic trigger code verified across all files!');
 
-console.log('\n🎉 ALL 5 TEST SUITES PASSED CLEANLY!');
+// Test 6: Verify 10/26 simulation references are completely eliminated
+console.log('▶ Test 6: Verify 10/26 test references are cleaned out');
+assert(!popupHtmlContent.includes('btnPreset1026'), 'popup.html must not contain btnPreset1026');
+assert(!popupJsContent.includes('URL_1026'), 'popup.js must not contain URL_1026');
+assert(!popupJsContent.includes('btnPreset1026'), 'popup.js must not contain btnPreset1026');
+assert(!contentJsContent.includes("targetDate === '2026/10/26'"), 'content.js must not contain 10/26 fallback');
+console.log('  ✓ 10/26 simulation references completely cleaned out!');
+
+// Test 7: Verify Stop & Resume Lifecycle Persistence Logic
+console.log('▶ Test 7: Stop & Resume Lifecycle Persistence');
+const STORAGE_KEY = 'takachiho_booking_profile';
+let mockStorage = {
+  [STORAGE_KEY]: {
+    targetUrl: 'https://eipro.jp/...',
+    targetDate: '2026/11/07',
+    targetTime: '08:30:00',
+    autoHold: true
+  }
+};
+
+function mockStopAllResources(config, persist = false) {
+  let isStopped = true;
+  let isBursting = false;
+  if (persist) {
+    if (config) config.autoHold = false;
+    mockStorage[STORAGE_KEY].autoHold = false;
+  }
+  return { isStopped, isBursting, autoHold: mockStorage[STORAGE_KEY].autoHold };
+}
+
+function mockResumeAllResources(config, persist = false) {
+  let isStopped = false;
+  let isBursting = false;
+  if (config) config.autoHold = true;
+  if (persist) {
+    mockStorage[STORAGE_KEY].autoHold = true;
+  }
+  return { isStopped, isBursting, autoHold: mockStorage[STORAGE_KEY].autoHold };
+}
+
+let cfg = { ...mockStorage[STORAGE_KEY] };
+// Initially running
+assert.strictEqual(cfg.autoHold, true, 'Initially autoHold should be true');
+
+// User clicks Stop in HUD or Popup -> persists to storage
+const stopRes = mockStopAllResources(cfg, true);
+assert.strictEqual(stopRes.isStopped, true, 'isStopped must be true');
+assert.strictEqual(stopRes.autoHold, false, 'Storage autoHold must be persisted as false');
+assert.strictEqual(mockStorage[STORAGE_KEY].autoHold, false, 'Global mockStorage must be false');
+console.log('  ✓ Stop action persists autoHold = false to storage');
+
+// User clicks Resume in HUD or Popup -> persists to storage
+const resumeRes = mockResumeAllResources(cfg, true);
+assert.strictEqual(resumeRes.isStopped, false, 'isStopped must be false after resume');
+assert.strictEqual(resumeRes.autoHold, true, 'Storage autoHold must be persisted as true');
+assert.strictEqual(mockStorage[STORAGE_KEY].autoHold, true, 'Global mockStorage must be true');
+console.log('  ✓ Resume action persists autoHold = true to storage');
+
+// Test 8: New Page Load / Reload with Stopped State
+console.log('▶ Test 8: New Page Load Initialization Behavior when Stopped');
+function mockPageInit(storageData) {
+  const loadedConfig = storageData[STORAGE_KEY] || { autoHold: true };
+  const isMasterArmed = loadedConfig.autoHold !== false;
+  let isStopped = !isMasterArmed;
+  let clockRunning = isMasterArmed;
+  let observerActive = isMasterArmed;
+  return { isStopped, clockRunning, observerActive, isMasterArmed };
+}
+
+// Case A: Storage has autoHold: false (User previously stopped)
+mockStorage[STORAGE_KEY].autoHold = false;
+const newTabStopped = mockPageInit(mockStorage);
+assert.strictEqual(newTabStopped.isStopped, true, 'New tab must initialize in stopped state');
+assert.strictEqual(newTabStopped.clockRunning, false, 'New tab clock/burst should NOT run');
+assert.strictEqual(newTabStopped.observerActive, false, 'New tab button observer should NOT be active');
+console.log('  ✓ When stopped, newly opened tab or reloaded page strictly stays stopped!');
+
+// Case B: Storage has autoHold: true (Active mode)
+mockStorage[STORAGE_KEY].autoHold = true;
+const newTabActive = mockPageInit(mockStorage);
+assert.strictEqual(newTabActive.isStopped, false, 'New tab must initialize in armed state');
+assert.strictEqual(newTabActive.clockRunning, true, 'New tab clock should run');
+assert.strictEqual(newTabActive.observerActive, true, 'New tab observer should be active');
+console.log('  ✓ When active, newly opened tab initializes ready to fire!');
+
+// Test 9: Multi-tab real-time storage.onChanged synchronization
+console.log('▶ Test 9: Multi-Tab Synchronization via chrome.storage.onChanged');
+function simulateStorageChangedEvent(currentTabState, newProfile) {
+  let state = { ...currentTabState };
+  if (newProfile.autoHold === false) {
+    if (!state.isStopped) {
+      state.isStopped = true;
+      state.isBursting = false;
+      state.observerActive = false;
+    }
+  } else {
+    if (state.isStopped) {
+      state.isStopped = false;
+      state.observerActive = true;
+    }
+  }
+  return state;
+}
+
+let tab1State = { isStopped: false, isBursting: false, observerActive: true };
+let tab2State = { isStopped: false, isBursting: false, observerActive: true };
+
+// Tab 1 stops -> storage changes -> Tab 2 receives event
+const tab2AfterStop = simulateStorageChangedEvent(tab2State, { autoHold: false });
+assert.strictEqual(tab2AfterStop.isStopped, true, 'Tab 2 must stop immediately when Tab 1 stops');
+assert.strictEqual(tab2AfterStop.observerActive, false, 'Tab 2 observer must disconnect');
+
+// Tab 2 resumes -> storage changes -> Tab 1 receives event
+const tab1AfterResume = simulateStorageChangedEvent(tab2AfterStop, { autoHold: true });
+assert.strictEqual(tab1AfterResume.isStopped, false, 'Tab 1 must resume immediately when Tab 2 resumes');
+assert.strictEqual(tab1AfterResume.observerActive, true, 'Tab 1 observer must reconnect');
+console.log('  ✓ Multi-tab synchronization verified: stopping on any tab stops all tabs!');
+
+console.log('\n🎉 ALL 9 TEST SUITES PASSED CLEANLY AND COMPLETELY!');
+

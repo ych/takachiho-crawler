@@ -22,20 +22,20 @@ const DEFAULT_SETTINGS = {
   cardNumber: ''
 };
 
-// Presets for 10/26 simulation and 11/07 official
-const URL_1026 = 'https://eipro.jp/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a914cc-b08c-4413-94a1-9dd8c0a8018d&service_start_datetime=2026/10/26%2008:30:00&service_end_datetime=2026/10/26%2009:00:00';
+// Preset for 11/07 official
 const URL_1107 = 'https://eipro.jp/takachiho1/events/view/EV00000007?closable=1&service_cd=6892dd9d-5b54-4202-bd1d-4aa6c0a8018d&service_session_cd=68a916a6-59c8-459d-9643-a231c0a8018d&service_start_datetime=2026/11/07%2008:30:00&service_end_datetime=2026/11/07%2009:00:00';
 
 // UI Elements
 const els = {
   cardTargetText: document.getElementById('cardTargetText'),
   cardLaunchText: document.getElementById('cardLaunchText'),
+  cardStatusBadge: document.getElementById('cardStatusBadge'),
   btnMissionGo: document.getElementById('btnMissionGo'),
+  btnMasterToggle: document.getElementById('btnMasterToggle'),
 
   targetUrl: document.getElementById('targetUrl'),
   btnUseCurrentUrl: document.getElementById('btnUseCurrentUrl'),
   btnGoTargetUrl: document.getElementById('btnGoTargetUrl'),
-  btnPreset1026: document.getElementById('btnPreset1026'),
   btnPreset1107: document.getElementById('btnPreset1107'),
   urlMismatchWarning: document.getElementById('urlMismatchWarning'),
 
@@ -198,14 +198,6 @@ function updatePresetButtonActiveState() {
   const targetDate = els.targetDate.value.trim();
   const urlStr = els.targetUrl.value.trim();
 
-  if (els.btnPreset1026) {
-    if (targetDate === '2026/10/26' && urlStr.includes('2026/10/26')) {
-      els.btnPreset1026.classList.add('active');
-    } else {
-      els.btnPreset1026.classList.remove('active');
-    }
-  }
-
   if (els.btnPreset1107) {
     if (targetDate === '2026/11/07' && urlStr.includes('2026/11/07')) {
       els.btnPreset1107.classList.add('active');
@@ -277,6 +269,27 @@ els.earlyBufferMs.addEventListener('change', updateTriggerPreview);
 // 4. 設定讀取與儲存
 // ==========================================
 
+function updateMasterToggleUI() {
+  const isArmed = els.autoHold ? els.autoHold.checked : true;
+  if (els.cardStatusBadge) {
+    els.cardStatusBadge.textContent = isArmed ? '🟢 監控就緒中' : '⏹️ 搶位已停止';
+    els.cardStatusBadge.style.background = isArmed ? 'rgba(255,255,255,0.22)' : 'rgba(239, 68, 68, 0.45)';
+  }
+  if (els.btnMasterToggle) {
+    if (isArmed) {
+      els.btnMasterToggle.textContent = '🛑 停止搶位';
+      els.btnMasterToggle.style.background = '#fee2e2';
+      els.btnMasterToggle.style.color = '#991b1b';
+      els.btnMasterToggle.style.borderColor = '#fca5a5';
+    } else {
+      els.btnMasterToggle.textContent = '▶️ 啟動搶位';
+      els.btnMasterToggle.style.background = '#dcfce7';
+      els.btnMasterToggle.style.color = '#166534';
+      els.btnMasterToggle.style.borderColor = '#86efac';
+    }
+  }
+}
+
 function loadSettings() {
   chrome.storage.local.get([STORAGE_KEY], (res) => {
     const data = Object.assign({}, DEFAULT_SETTINGS, res[STORAGE_KEY] || {});
@@ -292,6 +305,8 @@ function loadSettings() {
 
     els.autoHold.checked = data.autoHold !== false;
     els.autoClickStatement.checked = data.autoClickStatement !== false;
+
+    updateMasterToggleUI();
 
     if (els.lName) els.lName.value = data.lName || '';
     if (els.fName) els.fName.value = data.fName || '';
@@ -364,23 +379,13 @@ function saveSettings(auto = false) {
 // 5. 事件監聽 (切換按鈕、網址聯動、日誌)
 // ==========================================
 
-// 日期切換按鈕：點擊立即聯動所有欄位 + 自動儲存 (防呆免手動二次按儲存)
-if (els.btnPreset1026) {
-  els.btnPreset1026.addEventListener('click', () => {
-    els.targetUrl.value = URL_1026;
-    els.targetDate.value = '2026/10/26';
-    els.targetTime.value = '08:30:00';
-    appendLog('[切換按鈕] 使用者點擊 10/26 實測時段，執行防呆聯動並自動儲存', 'info');
-    saveSettings(true);
-  });
-}
-
+// 預設快速套用按鈕：點擊立即聯動所有欄位 + 自動儲存 (防呆免手動二次按儲存)
 if (els.btnPreset1107) {
   els.btnPreset1107.addEventListener('click', () => {
     els.targetUrl.value = URL_1107;
     els.targetDate.value = '2026/11/07';
     els.targetTime.value = '08:30:00';
-    appendLog('[切換按鈕] 使用者點擊 11/07 正式搶票，執行防呆聯動並自動儲存', 'info');
+    appendLog('[重設按鈕] 使用者套用 11/07 正式搶票預設值，執行聯動並自動儲存', 'info');
     saveSettings(true);
   });
 }
@@ -402,6 +407,23 @@ if (els.btnMissionGo) {
   els.btnMissionGo.addEventListener('click', () => {
     saveSettings(true);
     els.btnGoTargetUrl.click();
+  });
+}
+
+// 頂部任務卡「全域搶位總開關」
+if (els.btnMasterToggle) {
+  els.btnMasterToggle.addEventListener('click', () => {
+    els.autoHold.checked = !els.autoHold.checked;
+    updateMasterToggleUI();
+    appendLog(els.autoHold.checked ? '▶️ 使用者啟動搶位監控，全域儲存並同步至分頁' : '🛑 使用者停止搶位監控，全域儲存並同步至分頁', els.autoHold.checked ? 'info' : 'warn');
+    saveSettings(true);
+  });
+}
+
+if (els.autoHold) {
+  els.autoHold.addEventListener('change', () => {
+    updateMasterToggleUI();
+    saveSettings(true);
   });
 }
 
