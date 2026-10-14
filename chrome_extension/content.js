@@ -1,4 +1,4 @@
-// content.js - Takachiho Gorge Boat Slot-Locking Specialist v1.0.3 (高千穂峡ボート 極速佔位助手)
+// content.js - Takachiho Gorge Boat Slot-Locking Specialist v1.0.4 (高千穂峡ボート 極速佔位助手)
 // 輕量、純淨、零卡頓架構：使用 Shadow DOM 隔離，杜絕 DOM 重繪迴圈與崩潰
 (function () {
   'use strict';
@@ -22,6 +22,7 @@
 
   let activeAbortController = null;
   let statementBtnClicked = false;
+  let lastTriggerWave = '';
 
   let hudHost = null;
   let hudShadow = null;
@@ -29,6 +30,22 @@
   // 日誌隊列 (上限 80 條)
   const MAX_LOGS = 80;
   let debugLogs = [];
+  let storageSaveTimeout = null;
+
+  function scheduleSaveLogs() {
+    if (storageSaveTimeout) return;
+    storageSaveTimeout = setTimeout(() => {
+      storageSaveTimeout = null;
+      try {
+        chrome.storage.local.get([LOGS_STORAGE_KEY], (res) => {
+          let savedLogs = res[LOGS_STORAGE_KEY] || [];
+          savedLogs = savedLogs.concat(debugLogs.slice(-10));
+          if (savedLogs.length > MAX_LOGS) savedLogs = savedLogs.slice(-MAX_LOGS);
+          chrome.storage.local.set({ [LOGS_STORAGE_KEY]: savedLogs });
+        });
+      } catch (e) {}
+    }, 1500);
+  }
 
   // ==========================================
   // 0. 日誌系統 (Console 染色、HUD 顯示、儲存、下載檔案)
@@ -55,15 +72,7 @@
     console.log(`%c[TakachihoHelper][${level.toUpperCase()}][${time}]`, styles[level] || styles.info, msg);
 
     updateHUDLogs();
-
-    try {
-      chrome.storage.local.get([LOGS_STORAGE_KEY], (res) => {
-        let savedLogs = res[LOGS_STORAGE_KEY] || [];
-        savedLogs.push(entry);
-        if (savedLogs.length > MAX_LOGS) savedLogs = savedLogs.slice(-MAX_LOGS);
-        chrome.storage.local.set({ [LOGS_STORAGE_KEY]: savedLogs });
-      });
-    } catch (e) {}
+    scheduleSaveLogs();
   }
 
   function updateHUDLogs() {
@@ -82,7 +91,7 @@
     const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     const filename = `takachiho_hud_${dateStr}.log`;
 
-    const content = `==========================================================\nTakachiho Gorge Boat Helper v1.0.3 - HUD Log Export\nURL: ${window.location.href}\nExport Time: ${new Date().toLocaleString()}\n==========================================================\n\n` + lines.join('\n');
+    const content = `==========================================================\nTakachiho Gorge Boat Helper v1.0.4 - HUD Log Export\nURL: ${window.location.href}\nExport Time: ${new Date().toLocaleString()}\n==========================================================\n\n` + lines.join('\n');
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
 
@@ -164,6 +173,7 @@
   function resumeAllResources(persistStorage = false) {
     isStopped = false;
     statementBtnClicked = false;
+    lastTriggerWave = '';
     if (config) config.autoHold = true;
     updateStopButtonUI(false);
     updateStatus('waiting', '🟢 重新啟動監控中...');
@@ -484,7 +494,7 @@
           <div class="th-header" id="thHeader">
             <div class="th-header-title">
               <span>🛶 高千穂峡ボート 搶位助手</span>
-              <span class="th-version-badge">v1.0.3</span>
+              <span class="th-version-badge">v1.0.4</span>
             </div>
             <button type="button" class="th-toggle-btn" id="thToggleBtn">−</button>
           </div>
@@ -715,7 +725,9 @@
   function startClock() {
     if (countdownTimer) clearInterval(countdownTimer);
 
-    countdownTimer = setInterval(() => {
+    let currentIntervalMs = 1000;
+
+    const tick = () => {
       if (isStopped) return;
 
       const now = new Date();
@@ -732,18 +744,42 @@
 
       updateHUDCountdown(now);
 
-      // 開賣觸發 (支援任意開賣時間如 08:00, 08:15, 08:30 等，在發動時間 ~ 發動後 10 秒區間觸發)
+      // 計算開賣時間差 (毫秒)
+      const baseTimeStr = (config && config.launchBaseTime) || '08:00:00';
+      const parts = baseTimeStr.split(':');
+      const targetH = parseInt(parts[0], 10) || 8;
+      const targetM = parseInt(parts[1], 10) || 0;
+      const targetS = parseInt(parts[2], 10) || 0;
+      const targetDateObj = new Date(now);
+      targetDateObj.setHours(targetH, targetM, targetS, 0);
+      const diffMs = targetDateObj.getTime() - now.getTime();
+
+      // 自適應時鐘頻率：開賣前 5 秒或發動期間 (diffMs <= 5000 且 >= -10000) 進入 50ms 狙擊模式
+      // 其餘待命時間使用 1000ms (1秒)，節省 95% CPU，徹底消除滑鼠卡頓
+      const needHighPrecision = diffMs <= 5000 && diffMs >= -10000;
+      const desiredInterval = needHighPrecision ? 50 : 1000;
+      if (currentIntervalMs !== desiredInterval) {
+        currentIntervalMs = desiredInterval;
+        clearInterval(countdownTimer);
+        countdownTimer = setInterval(tick, currentIntervalMs);
+      }
+
+      // 開賣觸發 (嚴格單次發動，避免 10 秒區間內瘋狂反覆重啟 12 連發造成 CPU 暴增)
       if (config && config.autoHold && !isBursting && !slotLocked && !window.location.pathname.includes('/orders/add')) {
         const targetLaunchStr = config.launchTime || '07:59:59.985';
-        const baseTimeStr = config.launchBaseTime || '08:00:00';
         const maxTriggerStr = calculateMaxTriggerTime(baseTimeStr);
 
         if (timeStr >= targetLaunchStr && timeStr <= maxTriggerStr) {
-          addLog(`達到開賣預定發動時間 (${timeStr})！立即啟動精準鎖位 (Burst Hold)...`, 'info');
-          startBurstHold(false);
+          if (lastTriggerWave !== baseTimeStr) {
+            lastTriggerWave = baseTimeStr;
+            addLog(`達到開賣預定發動時間 (${timeStr})！立即啟動精準鎖位 (Burst Hold)...`, 'info');
+            startBurstHold(false);
+          }
         }
       }
-    }, 50);
+    };
+
+    countdownTimer = setInterval(tick, currentIntervalMs);
   }
 
   // ==========================================
@@ -774,13 +810,21 @@
   async function resolveSessionCd() {
     if (!config || isStopped) return;
 
+    if (config.targetTime && config.targetTime > '16:00:00') {
+      addLog(`[防呆攔截] 目標時段 (${config.targetTime}) 無效！高千穂峽每日末班船為 16:00:00（16:30 為下船結束時間，非開船時段），請切換至 16:00:00。`, 'error');
+      updateStatus('stopped', '⚠️ 時段無效 (末班 16:00)');
+      return;
+    }
+
     // 0. 優先直接從當前網址參數解析 (檢查日期防呆)
     try {
       const currentUrlParams = new URLSearchParams(window.location.search);
       const urlSessionCd = currentUrlParams.get('service_session_cd');
       const urlStartDt = currentUrlParams.get('service_start_datetime');
       if (urlSessionCd) {
-        if (!urlStartDt || decodeURIComponent(urlStartDt).startsWith(config.targetDate)) {
+        const decodedStart = urlStartDt ? decodeURIComponent(urlStartDt) : '';
+        const urlDate = decodedStart.split(' ')[0] || '';
+        if (!urlDate || urlDate === config.targetDate) {
           resolvedSessionCd = urlSessionCd;
           addLog(`[防呆通過] 從當前網址參數直接解析 Session CD: ${resolvedSessionCd.slice(0, 10)}...`, 'success');
           updateHUDDisplay();
@@ -942,6 +986,13 @@
     burstAttempts = 0;
     statementBtnClicked = false;
 
+    if (config.targetTime && config.targetTime > '16:00:00') {
+      addLog(`[防呆攔截] 目標時段 (${config.targetTime}) 超出營業範圍！高千穂峽每日末班船為 16:00:00，已安全中止。`, 'error');
+      updateStatus('stopped', '⚠️ 時段無效 (末班 16:00)');
+      isBursting = false;
+      return;
+    }
+
     if (!resolvedSessionCd) {
       await resolveSessionCd();
     }
@@ -1043,7 +1094,7 @@
       // 若正在進行 API burst 鎖位，不觸發 HTML 按鈕以防表單重複提交造成 Session BlackHole
       if (config && config.autoClickStatement && !isBursting) {
         const btn = document.querySelector('button.order_with_statement');
-        if (btn && btn.offsetParent !== null) {
+        if (btn && btn.style.display !== 'none' && !btn.hidden) {
           statementBtnClicked = true;
           addLog('DOM 監控偵測到「予約手続き」按鈕出現！立即單次點擊進入預約流程！', 'success');
           btn.click();
@@ -1234,7 +1285,7 @@
     await loadConfig();
     const isMasterArmed = config && config.autoHold !== false;
 
-    addLog(`小幫手 v1.0.3 初始化完成。狀態: ${isMasterArmed ? '🟢 監控啟動中' : '⏹️ 已停止監控'}, 目標時段: ${config.targetDate} ${config.targetTime} (開賣 ${config.launchBaseTime || '08:00:00'})`, 'info');
+    addLog(`小幫手 v1.0.4 初始化完成。狀態: ${isMasterArmed ? '🟢 監控啟動中' : '⏹️ 已停止監控'}, 目標時段: ${config.targetDate} ${config.targetTime} (開賣 ${config.launchBaseTime || '08:00:00'})`, 'info');
     createHUD();
 
     if (!isMasterArmed) {

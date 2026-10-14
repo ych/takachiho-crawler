@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "高千穂峡ボート 自動搶位與預約小幫手",
   "short_name": "TakachihoHelper",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "自動鎖定高千穂峽貸しボート席位 (hold_slot)，秒速自動填寫預約客戶與信用卡資料，無縫銜接 3D Secure 簡訊驗證。",
   "permissions": [
     "storage",
